@@ -11,6 +11,18 @@ from allot.parser import parse_payout_book
 from allot.paths import WEB_DIR, load_book
 from allot.receipt import find_receipt, load_receipts, verify_receipt
 
+MAX_BODY_BYTES = 256 * 1024
+MAX_DRAIN_BYTES = 8 * 1024 * 1024
+
+
+class BodyTooLarge(ValueError):
+    """The POST body is larger than Allot will read."""
+
+    def __init__(self, message: str, length: int = 0) -> None:
+        super().__init__(message)
+        self.length = length
+
+
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -46,8 +58,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length") or "0")
-        if length > 16_384:
-            raise ValueError("Body is too large.")
+        if length > MAX_BODY_BYTES:
+            raise BodyTooLarge(f"Body must be under {MAX_BODY_BYTES // 1024} KB.", length)
         raw = self.rfile.read(length) if length else b"{}"
         if not raw:
             return {}
@@ -88,9 +100,15 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/verify/"):
             receipt = find_receipt(unquote(path.split("/", 3)[-1]))
             if receipt is None:
-                self._json(404, {"ok": False, "error": "No receipt with that id or hash."})
+                self._json(
+                    404,
+                    {
+                        "ok": False,
+                        "error": "No stored receipt with that id or hash. Hosted receipts are cleared when the free instance sleeps — POST the receipt JSON to /api/verify to check it without this disk.",
+                    },
+                )
                 return
-            self._json(200, verify_receipt(receipt))
+            self._json(200, {**verify_receipt(receipt), "source": "stored"})
             return
         if path.startswith("/payout/"):
             self._payout(path)
@@ -105,8 +123,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self._read_json()
+        except BodyTooLarge as exc:
+            self._drain(exc.length)
+            self.close_connection = True
+            self._json(413, {"ok": False, "error": str(exc)})
+            return
         except (json.JSONDecodeError, ValueError) as exc:
             self._json(400, {"ok": False, "error": str(exc) or "Body must be JSON."})
+            return
+        if path == "/api/verify":
+            self._verify_pasted(payload)
             return
         text = str(payload.get("text") or "")
         if path == "/api/parse":
@@ -118,6 +144,30 @@ class Handler(BaseHTTPRequestHandler):
             self._json(status, result)
             return
         self._json(404, {"ok": False, "error": "Unknown endpoint."})
+
+    def _drain(self, length: int) -> None:
+        """Swallow a body we refused to parse, so the client reads our 413 instead of a reset socket."""
+        remaining = min(length, MAX_DRAIN_BYTES)
+        while remaining > 0:
+            chunk = self.rfile.read(min(65536, remaining))
+            if not chunk:
+                return
+            remaining -= len(chunk)
+
+    def _verify_pasted(self, payload: dict) -> None:
+        """Recompute the hash of a receipt someone pasted back. Nothing is read from disk."""
+        candidate = payload.get("receipt")
+        receipt = candidate if isinstance(candidate, dict) else payload
+        if not receipt.get("receipt_hash"):
+            self._json(
+                400,
+                {
+                    "ok": False,
+                    "error": "Post the receipt JSON itself, or {\"receipt\": {...}}. It must carry its receipt_hash.",
+                },
+            )
+            return
+        self._json(200, {**verify_receipt(receipt), "source": "pasted"})
 
     def _payout(self, path: str) -> None:
         parts = [unquote(part) for part in path.strip("/").split("/")]

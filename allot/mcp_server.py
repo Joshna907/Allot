@@ -56,11 +56,13 @@ TOOLS = [
     },
     {
         "name": "verify_receipt",
-        "description": "Recompute the SHA-256 of a stored receipt and compare it to the printed hash.",
+        "description": "Recompute the SHA-256 of a receipt and compare it to the printed hash. Pass a stored receipt_id, or the receipt object itself to check one that is no longer on disk.",
         "inputSchema": {
             "type": "object",
-            "properties": {"receipt_id": {"type": "string", "description": "Receipt id or receipt hash."}},
-            "required": ["receipt_id"],
+            "properties": {
+                "receipt_id": {"type": "string", "description": "Receipt id or receipt hash of a stored receipt."},
+                "receipt": {"type": "object", "description": "A receipt JSON object, verified without touching disk."},
+            },
         },
     },
 ]
@@ -92,10 +94,15 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             return _err("No receipt with that id or hash.")
         return _ok(receipt)
     if name == "verify_receipt":
+        pasted = arguments.get("receipt")
+        if isinstance(pasted, dict):
+            if not pasted.get("receipt_hash"):
+                return _err("That receipt object carries no receipt_hash.")
+            return _ok({**verify_receipt(pasted), "source": "pasted"})
         receipt = find_receipt(str(arguments.get("receipt_id") or ""))
         if receipt is None:
-            return _err("No receipt with that id or hash.")
-        return _ok(verify_receipt(receipt))
+            return _err("No stored receipt with that id or hash. Pass the receipt object instead to verify it without disk.")
+        return _ok({**verify_receipt(receipt), "source": "stored"})
     return _err(f"Unknown tool: {name}")
 
 

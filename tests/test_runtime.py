@@ -157,6 +157,16 @@ class HttpContractTests(unittest.TestCase):
     def _url(self, path: str) -> str:
         return f"http://127.0.0.1:{self.port}{path}"
 
+    def _post(self, path: str, payload: object) -> dict:
+        request = Request(
+            self._url(path),
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=10) as response:
+            return json.loads(response.read())
+
     def test_healthz_no_network(self) -> None:
         with patch("allot.price.fetch_pair_price") as mocked:
             with urlopen(self._url("/healthz"), timeout=5) as response:
@@ -212,16 +222,59 @@ class HttpContractTests(unittest.TestCase):
         except HTTPError as exc:
             self.assertEqual(exc.code, 403)
 
+    def test_verify_pasted_receipt_with_nothing_on_disk(self) -> None:
+        receipt = attach_hash({"receipt_id": "ALLOT-PASTED", "mode": "demo-preview", "legs": []})
+        self.assertEqual(load_receipts(), [])
+        result = self._post("/api/verify", receipt)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["source"], "pasted")
+        self.assertEqual(result["claimed"], result["recomputed"])
+
+    def test_verify_pasted_receipt_catches_tampering(self) -> None:
+        receipt = attach_hash({"receipt_id": "ALLOT-PASTED", "totals": {"spend_usd": "320.00"}})
+        receipt["totals"]["spend_usd"] = "420.00"
+        result = self._post("/api/verify", {"receipt": receipt})
+        self.assertFalse(result["ok"])
+        self.assertNotEqual(result["claimed"], result["recomputed"])
+
+    def test_verify_without_a_hash_is_rejected(self) -> None:
+        try:
+            self._post("/api/verify", {"receipt_id": "ALLOT-PASTED"})
+            self.fail("expected 400")
+        except HTTPError as exc:
+            self.assertEqual(exc.code, 400)
+
+    def test_missing_stored_receipt_points_at_the_paste_route(self) -> None:
+        try:
+            urlopen(self._url("/api/verify/ALLOT-GONE"), timeout=5)
+            self.fail("expected 404")
+        except HTTPError as exc:
+            self.assertEqual(exc.code, 404)
+            self.assertIn("/api/verify", json.loads(exc.read())["error"])
+
+    def test_oversized_body_is_refused(self) -> None:
+        try:
+            self._post("/api/execute", {"text": "x" * (300 * 1024)})
+            self.fail("expected 413")
+        except HTTPError as exc:
+            self.assertEqual(exc.code, 413)
+
 
 class McpTests(unittest.TestCase):
     def test_tool_list_and_unknown(self) -> None:
         names = {tool["name"] for tool in TOOLS}
         self.assertGreaterEqual(
             names,
-            {"parse_payout_book", "execute_payout", "list_receipts", "get_receipt", "verify_receipt"},
+            {"parse_payout_book", "execute_payout", "probe_rails", "list_receipts", "get_receipt", "verify_receipt"},
         )
         result = call_tool("not_a_tool", {})
         self.assertTrue(result.get("isError"))
+
+    def test_verify_pasted_receipt_without_the_store(self) -> None:
+        receipt = attach_hash({"receipt_id": "ALLOT-MCP", "legs": []})
+        payload = json.loads(call_tool("verify_receipt", {"receipt": receipt})["content"][0]["text"])
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["source"], "pasted")
 
     def test_parse_call(self) -> None:
         result = call_tool("parse_payout_book", {"text": "send $400 to three people monthly, 80% to spend, 20% held"})

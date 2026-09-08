@@ -94,7 +94,18 @@ Allot also speaks MCP on stdio so an agent can parse and pay without the HTML co
 python -m allot mcp
 ```
 
-Tools: `get_payout_book`, `parse_payout_book`, `execute_payout` (preparation only), `list_receipts`, `get_receipt`, `verify_receipt`.
+Tools: `get_payout_book`, `parse_payout_book`, `execute_payout` (preparation only), `probe_rails`, `list_receipts`, `get_receipt`, `verify_receipt`. `probe_rails` pings Binance and B402 Bazaar without Agent OS OAuth or KYC. `verify_receipt` takes a stored `receipt_id` or a whole receipt object.
+
+## Verifying a receipt
+
+The hash is SHA-256 over the canonical JSON of the receipt with `receipt_hash` removed — sorted keys, no whitespace. Two ways to check one:
+
+```bash
+curl https://<host>/api/verify/<receipt id or hash>          # stored on the server's disk
+curl -X POST https://<host>/api/verify -d @receipt.json      # a receipt you were handed
+```
+
+The second route reads nothing from disk, so it still answers after the free Render instance sleeps and clears `/tmp`. Both return the claimed hash, the recomputed hash, and whether they match.
 
 ## Why this shape
 
