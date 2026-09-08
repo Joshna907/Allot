@@ -1,96 +1,174 @@
 # Allot
 
-Hackathon repo: [Joshna907/Allot](https://github.com/Joshna907/Allot). Two-person split: [`TEAM.md`](TEAM.md). Hosted demo: set `PUBLIC_BASE_URL` after the first Render deploy, then paste the HTTPS origin here.
+A payout agent for Binance Agent OS. It turns a plain-English payout book into [x402](https://developers.binance.com/en/docs/products/onchainpay-x402/introduction) v2 payment requirements, checks them against Binance Spot's live trading rules, and issues a receipt anyone can recompute.
 
-**One budget. Everyone accounted for.**
+![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen) ![Tests](https://img.shields.io/badge/tests-59%20python%20%2B%2012%20node-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue) ![Status](https://img.shields.io/badge/status-demo%20only-orange)
 
-Allot is a cross-border payout agent for Binance Agent OS. A sender describes a payout book in plain English — *send $400 to three people monthly, 80% to spend, 20% held* — and Allot parses it, prices it on Binance, writes an [x402](https://developers.binance.com/en/docs/products/onchainpay-x402/introduction) envelope for each spend leg, and issues a receipt anyone can hash.
+> **Disclaimer.** Allot is a hackathon demo. It prepares payment requirements and never signs, broadcasts, settles, or custodies anything. It holds no keys, requires no Binance API key, and moves no funds. Prices come from Binance Spot Testnet with the public mainnet ticker as fallback. Nothing here is an offer to transmit money.
 
-It is not a trading bot. It does not gate risk. It does not invent a fourth recipient. Three names, one pair, one schedule.
+## Contents
 
-## The gap
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [The Binance rail](#the-binance-rail)
+- [The payout book](#the-payout-book)
+- [HTTP API](#http-api)
+- [MCP tools](#mcp-tools)
+- [Web interface](#web-interface)
+- [Verifying a receipt](#verifying-a-receipt)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Project layout](#project-layout)
+- [Design principles](#design-principles)
+- [Scope and limits](#scope-and-limits)
+- [Security](#security)
+- [Team](#team)
+- [License](#license)
 
-Allot explores a payments use case for non-traders: coordinating a fixed monthly allocation across three recipients, with an inspectable record of what was prepared.
+## Overview
 
-Remittance is the job most people actually have. Allot is the counter for that job.
+Most agents built on exchange infrastructure trade. Allot pays. A sender describes a recurring payout in the way they would say it out loud — *send $400 to three people monthly, 80% to spend, 20% held* — and Allot parses that into a validated instruction, prices it on Binance, checks the allocation against Binance's own exchange filters, writes an x402 `PaymentRequired` envelope for each spend leg, and issues a hashed receipt.
 
-## What it does
+It is not a trading bot, and it refuses to behave like one: trading language is rejected at the parser, the roster is fixed at three recipients, and the schedule is monthly. Off-book amounts snap back to the booked figure with a warning rather than being obeyed silently.
 
-1. **Parse.** A sentence becomes a validated instruction. Recipients, pair (`USDCUSDT`), and cadence (`monthly`) are the book. Off-book amounts snap back. Trading language is rejected.
-2. **Price.** Live last price from Binance Spot Testnet, with the public mainnet ticker as fallback.
-3. **Check it against Binance's own rules.** Five public Spot reads in parallel — `exchangeInfo`, `avgPrice`, `ticker/24hr`, `depth`, `time` — become seven pass/warn/fail checks on the prepared book. See [the Binance rail](#the-binance-rail).
-4. **Requirements.** Each spend leg is an x402 v2 `PaymentRequired` object for BSC USDT (`exact` scheme), plus the Base64 `PAYMENT-REQUIRED` header. Validated through Agentic Wallet preview locally if `baw` is available. Allot never signs.
-5. **Discover.** A real call to [B402 Bazaar](https://www.binance.com/bapi/ramp/v1/public/ramp/b402/bazaar/resources). Failure is a warning; it does not block preparation.
-6. **Receipt.** Totals, pending confirmation, SHA-256 of the canonical JSON. Hosted receipts on Render live in `/tmp` and disappear after sleep/redeploy.
+The distinguishing claim is not "it calls the Binance API". It is that **the paper tells the truth about the rail**: every number on a receipt is traceable to a public Binance read, and everything the demo cannot do is written on the receipt itself.
 
-## What is real, and what is not
+## Prerequisites
 
-Say this out loud in the demo.
+| Requirement | Notes |
+| --- | --- |
+| Python 3.11+ | 3.13.5 in deployment. Standard library only — `requirements.txt` installs nothing |
+| Node 18+ | Optional. Test runner for the frontend component tests only, not an app dependency |
+| `baw` CLI | Optional. Binance Agentic Wallet, for local `x402-payment preview`. Allot never calls `sign` or `wallet send` |
 
-**Real**
+No Binance API key, no merchant `clientId`, and no Agent OS OAuth are required. Every Binance endpoint Allot reads is public.
 
-- Binance `USDCUSDT` last price (testnet, then mainnet public ticker).
-- Binance exchange filters — pair status, lot step, minimum and maximum notional — applied to every leg.
-- Binance rolling average price, 24h range, live order-book depth, and server-clock drift.
-- B402 Bazaar public discovery (supporting evidence).
-- x402 v2 payment requirements, also served as HTTP 402.
+## Quick start
 
-**Not settled**
+```bash
+git clone https://github.com/Joshna907/Allot.git
+cd Allot
+python -m allot serve
+```
 
-- No signature, no broadcast, no B402 merchant settle.
-- Agentic Wallet can preview requirements locally (`baw x402-payment preview`). Allot does not call `sign` or `wallet send`.
-- Live Binance Pay. Demo preview only.
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Liveness probe: [`/healthz`](http://127.0.0.1:8765/healthz).
 
-Rail decision: **Wallet preview plus demo-only payout preparation. No signing.**
+The CLI covers the same surface without the browser:
+
+```bash
+python -m allot health                                                        # rail reachability
+python -m allot parse 'send $400 to three people monthly, 80% to spend, 20% held'
+python -m allot pay   'send $400 to three people monthly, 80% to spend, 20% held'
+python -m allot mcp                                                           # MCP server on stdio
+```
+
+## How it works
+
+1. **Parse.** The sentence becomes a validated instruction. Recipients, pair (`USDCUSDT`), and cadence (`monthly`) come from the book. Amounts and splits are read from the sentence; off-book amounts snap back to the booked figure with a warning. Trading verbs — buy, sell, swap, long, short, leverage — are rejected outright.
+2. **Price.** Last price from Binance Spot Testnet, falling back to the public mainnet ticker.
+3. **Check against Binance's rules.** Five public Spot endpoints are read in parallel and turned into seven pass/warn/fail checks on the prepared allocation. See [The Binance rail](#the-binance-rail).
+4. **Build requirements.** Each spend leg becomes an x402 v2 `PaymentRequired` object for BSC USDT (`exact` scheme), plus its Base64 `PAYMENT-REQUIRED` header. Allot never signs.
+5. **Discover.** A live call to the [B402 Bazaar](https://www.binance.com/bapi/ramp/v1/public/ramp/b402/bazaar/resources) public resource list. Failure is a warning; it does not block preparation.
+6. **Issue a receipt.** Totals, per-leg detail, every rail read, the preflight report, what is still pending, and a SHA-256 over the canonical JSON.
+7. **Serve the requirement.** `GET /payout/{receipt}/{recipient}` returns a real HTTP 402 carrying that leg's requirement. Presenting a `PAYMENT-SIGNATURE` header returns 403 — settlement is disabled, deliberately and in code.
 
 ## The Binance rail
 
-Allot does not just read a price off Binance and call it an integration. Before a receipt is issued, the prepared book is checked against Binance's own live trading rules. Five public Spot endpoints are read in parallel — no API key, no KYC, no merchant onboarding — and `exchangeInfo` is cached for ten minutes.
+Reading a price is not an integration. Before a receipt is issued, the prepared book is checked against Binance's own live trading rules. Five public Spot endpoints are read concurrently; `exchangeInfo` is cached for ten minutes.
 
-| Binance read | Used for |
+| Binance endpoint | Used for |
 | --- | --- |
 | `GET /api/v3/exchangeInfo` | pair status, tick size, lot step, min/max notional, permissions |
 | `GET /api/v3/avgPrice` | the same rolling average Binance's own price-band filter uses |
 | `GET /api/v3/ticker/24hr` | 24h high, low, change, and turnover as context for the quote |
 | `GET /api/v3/depth` | real bid levels, walked to price the conversion |
-| `GET /api/v3/time` | Binance server clock, against which the receipt timestamp is checked |
+| `GET /api/v3/time` | Binance server clock, checked against the receipt timestamp |
 
-That produces seven checks on every receipt, each `pass`, `warn`, `fail`, or `skipped`:
+Seven checks are recorded on every receipt, each `pass`, `warn`, `fail`, or `skipped`:
 
-1. **Pair is live** — the symbol's status is `TRADING`.
-2. **Each leg clears the exchange minimum** — every spend leg is compared to `minNotional`. A leg too small to be a real Binance order is named.
-3. **Total sits inside the ceiling** — the book is compared to `maxNotional`.
-4. **Amounts match the lot step** — legs are quantized down to `stepSize`, and any remainder is reported rather than hidden.
-5. **Quote agrees with the rolling average** — last price against `avgPrice`, in basis points, with a 50 bps tolerance.
-6. **Live book can absorb the payout** — the bid side is walked for the full spend size to give an average fill, slippage in bps, and levels consumed. A partial fill is reported as a partial fill.
-7. **Receipt clock matches Binance** — drift in milliseconds from Binance server time.
+| # | Check | Fails or warns when |
+| --- | --- | --- |
+| 1 | Pair is live | symbol status is not `TRADING` |
+| 2 | Each leg clears the exchange minimum | a spend leg is under `minNotional` — the leg is named |
+| 3 | Total sits inside the ceiling | the book exceeds `maxNotional` |
+| 4 | Amounts match the lot step | a leg is not a whole multiple of `stepSize`; the remainder is reported, not hidden |
+| 5 | Quote agrees with the rolling average | last price is more than 50 bps from `avgPrice` |
+| 6 | Live book can absorb the payout | the bid-side walk slips more than 25 bps, or cannot fill the size |
+| 7 | Receipt clock matches Binance | the host clock is more than 5s from Binance server time |
 
-A failed check does not silently pass and a Binance outage does not break preparation: unreachable reads become `skipped`, and the receipt still issues with `evidence.binance_reads` recording how many of the five endpoints answered. No order is ever placed. The depth walk is arithmetic over public data, not a trade.
+Check 6 walks the real bid side for the full spend size and reports average fill price, slippage in basis points, and levels consumed. It is arithmetic over public order-book data — **no order is placed**.
 
-## The booked three
+Degradation is explicit: unreachable endpoints become `skipped` checks, preparation still succeeds, and `evidence.binance_reads` records how many of the five answered (`"5/5"`, `"3/5"`, `"0/5"`). A Binance outage costs you evidence, never a receipt.
 
-| Name | City | Share of the spend pool | Why |
+## The payout book
+
+| Recipient | City | Share of spend pool | Purpose |
 | --- | --- | --- | --- |
 | Amara Okafor | Lagos | 40% | rent and food |
 | Kwame Boateng | Accra | 35% | studio invoice |
 | Elena Cruz | Manila | 25% | design retainer |
 
-$400 monthly allocation. By default, 80% ($320) becomes payment requirements and 20% ($80) is excluded. Allot does not hold funds. Each preparation is manual; there is no automatic scheduler. Pair is USDCUSDT.
+A $400 monthly allocation. By default 80% ($320) becomes payment requirements and 20% ($80) is excluded from preparation. Allot does not hold the excluded amount. Each preparation is manual — there is no scheduler, and nothing recurs on its own. Pair is `USDCUSDT`.
 
-## Run it
+## HTTP API
 
-Python 3.11+ locally (Render uses 3.13). No third-party packages.
+| Method | Route | Returns |
+| --- | --- | --- |
+| `GET` | `/healthz` | liveness, no network calls |
+| `GET` | `/api/health` | quote, Bazaar reachability, book summary |
+| `GET` | `/api/book` | the fixed payout configuration |
+| `GET` | `/api/rails` | the whole Binance rail in one call: status, filters, prices, book, clock, Bazaar |
+| `GET` | `/api/exchange-rules?symbol=` | live exchange filters for the pair |
+| `GET` | `/api/liquidity?usd=&symbol=` | depth walk: average fill, slippage bps, levels consumed |
+| `POST` | `/api/parse` | sentence → validated instruction, warnings, allocation |
+| `POST` | `/api/preflight` | all seven checks on a sentence, no receipt issued |
+| `POST` | `/api/execute` | prepare requirements and store a receipt |
+| `GET` | `/api/receipts` | stored demo receipts |
+| `GET` | `/api/receipts/{id\|hash}` | one receipt; `?download=1` sets a download filename |
+| `GET` | `/api/verify/{id\|hash}` | claimed vs recomputed hash for a stored receipt |
+| `POST` | `/api/verify` | same, for a receipt you post — reads no storage |
+| `GET`/`POST` | `/payout/{receipt}/{recipient}` | HTTP 402 with the x402 requirement; 403 if a signature is presented |
 
 ```bash
-python -m allot health
-python -m allot parse 'send $400 to three people monthly, 80% to spend, 20% held'
-python -m allot pay 'send $400 to three people monthly, 80% to spend, 20% held'
-python -m allot serve
+curl -s http://127.0.0.1:8765/api/rails
+curl -s 'http://127.0.0.1:8765/api/liquidity?usd=320'
+curl -s -X POST http://127.0.0.1:8765/api/preflight \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"send $400 to three people monthly, 80% to spend, 20% held"}'
 ```
 
-Then open [http://127.0.0.1:8765](http://127.0.0.1:8765). Desktop only. Fast probe: [http://127.0.0.1:8765/healthz](http://127.0.0.1:8765/healthz).
+`POST /api/execute` accepts an optional `request_id`. A bounded in-process cache (256 recent attempts) returns the same receipt for an identical retry, so a lost response does not become a second preparation. It does not survive a restart; after an uncertain response, check activity before retrying. Request bodies over 256 KB are refused with 413.
 
-The Python server hosts the complete no-build website. There is no `package.json` and no npm command:
+## MCP tools
+
+Allot speaks MCP over stdio, so an agent can use the whole surface without the web interface:
+
+```bash
+python -m allot mcp
+```
+
+| Tool | Does |
+| --- | --- |
+| `get_payout_book` | the fixed roster, schedule, pair, and split |
+| `parse_payout_book` | sentence → validated instruction |
+| `preflight_payout` | all seven Binance checks, no receipt issued |
+| `execute_payout` | prepare requirements and issue a hashed receipt — no transfer |
+| `binance_rail_status` | full Spot rail: status, filters, prices, book, clock, Bazaar |
+| `exchange_rules` | Binance's live filters for the pair |
+| `check_liquidity` | walk the live book for a size; fill price and slippage |
+| `probe_rails` | quick Binance + Bazaar reachability ping |
+| `list_receipts` | stored demo receipts |
+| `get_receipt` | one stored receipt by id or hash |
+| `verify_receipt` | recompute a hash from a stored id, or from a receipt object |
+
+`.cursor/mcp.json` also points Cursor at Binance Agent OS (`https://agent.binance.com/mcp/agentic`). That OAuth is optional — every tool above works without it.
+
+## Web interface
+
+The Python server hosts the complete no-build website. There is no `package.json` and no npm command.
 
 | Route | Purpose |
 | --- | --- |
@@ -98,118 +176,105 @@ The Python server hosts the complete no-build website. There is no `package.json
 | `/app` | Book overview, recipients, draft, recent activity, rail availability |
 | `/app/prepare` | Recoverable describe, review, and preparation journey |
 | `/receipts` | Searchable shared demo activity |
-| `/receipts/{receipt_id}` | Inspect one receipt, its legs, evidence, and x402 requirements |
-| `/verify` | Verify a receipt by ID or SHA-256 hash |
-| `/how-it-works` | Nontechnical product flow, limitations, and troubleshooting |
-| `/writeup` | Hackathon implementation notes and boundaries |
+| `/receipts/{receipt_id}` | One receipt: legs, evidence, x402 requirements |
+| `/verify` | Verify by ID, hash, or pasted receipt JSON |
+| `/how-it-works` | Nontechnical product flow, limitations, troubleshooting |
+| `/writeup` | Implementation notes and boundaries |
 
-```bash
-python -m unittest discover -s tests -v
-```
-
-Optional frontend component regression tests (Node is only a test runner, not an app dependency):
-
-```bash
-node --test tests/test_ui.mjs
-```
-
-Frontend modules: `web/app.js` (router), `web/product.js` (working pages),
-`web/public.js` (public pages), `web/ui.js` (shared components), `web/lib.js`
-(API and formatting), and token-based `web/styles.css`.
-See [UX handoff](UX_HANDOFF.md) for teammate integration details and verification evidence.
-
-The execute endpoint accepts an optional `request_id`. A bounded in-process cache
-reuses successful results for identical retry attempts (up to 256 recent attempts).
-It does not survive server restart. After an uncertain response, check activity
-before retrying. Receipt JSON can be downloaded from the existing receipt endpoint
-with `?download=1`.
-
-Environment:
-
-| Variable | Local default | Render |
-| --- | --- | --- |
-| `HOST` | `127.0.0.1` | `0.0.0.0` |
-| `PORT` | `8765` | supplied by Render |
-| `PUBLIC_BASE_URL` | `http://127.0.0.1:8765` | your `https://….onrender.com` |
-| `ALLOT_DATA_DIR` | `./data` | `/tmp/allot-data` |
-
-Deploy: `render.yaml` defines a free Python web service named `allot`, start `python -m allot serve`, health `/healthz`. Set `PUBLIC_BASE_URL` to the public HTTPS origin after the first deploy. Hosted receipts vanish when the free instance sleeps.
-
-## Agent OS / MCP
-
-Project `.cursor/mcp.json` points Cursor at Binance Agent OS:
-
-```text
-https://agent.binance.com/mcp/agentic
-```
-
-Agent OS MCP OAuth is optional. If Identification/KYC hangs, ship the counter anyway — prices still come from Binance Spot Testnet and B402 Bazaar.
-
-Allot also speaks MCP on stdio so an agent can parse and pay without the HTML counter:
-
-```bash
-python -m allot mcp
-```
-
-Eleven tools, all usable without Agent OS OAuth or KYC:
-
-| Tool | Does |
-| --- | --- |
-| `get_payout_book` | the fixed roster, schedule, pair, and split |
-| `parse_payout_book` | sentence → validated instruction |
-| `execute_payout` | prepare requirements and issue a hashed receipt (no transfer) |
-| `preflight_payout` | run all seven Binance checks with no receipt issued |
-| `binance_rail_status` | the whole Spot rail: status, filters, prices, book, clock, Bazaar |
-| `exchange_rules` | Binance's live filters for the pair |
-| `check_liquidity` | walk the live book for a size, return fill price and slippage |
-| `probe_rails` | quick Binance + Bazaar reachability ping |
-| `list_receipts` / `get_receipt` | stored demo receipts |
-| `verify_receipt` | recompute a hash from a stored id or a whole receipt object |
-
-## HTTP API
-
-| Route | Does |
-| --- | --- |
-| `GET /api/rails` | full Binance rail status, one call |
-| `GET /api/exchange-rules?symbol=` | live exchange filters |
-| `GET /api/liquidity?usd=320&symbol=` | depth walk: average fill, slippage bps, levels used |
-| `POST /api/preflight` | all seven checks on a sentence, no receipt stored |
-| `POST /api/parse` / `POST /api/execute` | parse, and prepare with an optional `request_id` |
-| `GET /api/book` / `GET /api/receipts` / `GET /api/receipts/{id}` | book and stored receipts |
-| `GET /api/verify/{id}` / `POST /api/verify` | verify a stored receipt, or one you post |
-| `GET\|POST /payout/{receipt}/{recipient}` | the x402 requirement, as a real HTTP 402 |
-| `GET /api/health` / `GET /healthz` | rail probe and liveness |
-
-```bash
-curl -s http://127.0.0.1:8765/api/rails
-curl -s 'http://127.0.0.1:8765/api/liquidity?usd=320'
-curl -s -X POST http://127.0.0.1:8765/api/preflight -H 'Content-Type: application/json' \
-  -d '{"text":"send $400 to three people monthly, 80% to spend, 20% held"}'
-```
+Frontend modules: `web/app.js` (router), `web/product.js` (working pages), `web/public.js` (public pages), `web/ui.js` (shared components), `web/lib.js` (API and formatting), and token-based `web/styles.css`. See [UX_HANDOFF.md](UX_HANDOFF.md).
 
 ## Verifying a receipt
 
-The hash is SHA-256 over the canonical JSON of the receipt with `receipt_hash` removed — sorted keys, no whitespace. Two ways to check one:
+The hash is SHA-256 over the canonical JSON of the receipt with `receipt_hash` removed — sorted keys, no whitespace, ASCII. Two ways to check one:
 
 ```bash
-curl https://<host>/api/verify/<receipt id or hash>          # stored on the server's disk
-curl -X POST https://<host>/api/verify -d @receipt.json      # a receipt you were handed
+curl https://<host>/api/verify/<receipt id or hash>      # against the server's stored copy
+curl -X POST https://<host>/api/verify -d @receipt.json  # against a receipt you were handed
 ```
 
-The second route reads nothing from disk, so it still answers after the free Render instance sleeps and clears `/tmp`. Both return the claimed hash, the recomputed hash, and whether they match.
+Both return the claimed hash, the recomputed hash, and whether they match. The second reads nothing from storage, so a downloaded receipt stays verifiable after the hosted instance sleeps and clears `/tmp`.
 
-## Why this shape
+## Configuration
 
-Governor and Deltr placed on writeup as much as code. The sentence we are defending is not "we integrated five APIs". It is: **a non-trader can read the paper in fifteen seconds, and the paper tells the truth about the rail.**
+| Variable | Local default | Deployment |
+| --- | --- | --- |
+| `HOST` | `127.0.0.1` | `0.0.0.0` |
+| `PORT` | `8765` | supplied by the platform |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8765` | the public HTTPS origin, no trailing slash |
+| `ALLOT_DATA_DIR` | `./data` | `/tmp/allot-data` |
 
-`execute_payout(instruction) -> receipt` prepares payment requirements. It does not transfer money.
+`PUBLIC_BASE_URL` is not cosmetic: it is the origin written into every x402 `resource.url`. Set it to the deployed origin or the payment requirements will point at a private address.
 
-## Eligibility (read before you tweet)
+## Deployment
 
-Hackathon named exclusions: United States, United Kingdom, EEA, Hong Kong, Singapore. Nigeria is not on that named list. Binance's live [List of Prohibited Countries](https://www.binance.com/en/terms) still has to be checked by the person submitting — naira rails are suspended; this demo never touches NGN.
+`render.yaml` defines a free Python web service: start `python -m allot serve`, health check `/healthz`, Python pinned by `PYTHON_VERSION`. Deploy as a Blueprint, then set `PUBLIC_BASE_URL` to the assigned HTTPS origin and redeploy.
 
-Entry does not count without all three: follow + repost, reply with video and GitHub, **survey form**.
+Free instances sleep when idle and clear `/tmp`, so hosted receipts are ephemeral by design. Download the JSON, or verify it later with `POST /api/verify`.
+
+## Testing
+
+```bash
+python -m unittest discover -s tests -v   # 59 tests, no network required
+node --test tests/test_ui.mjs             # 12 frontend component tests
+```
+
+The Python suite mocks every outbound call, including full Binance outages, thin order books, halted pairs, legs below the exchange minimum, and clock skew. `tests/test_runtime.py` covers the HTTP contract; `tests/test_binance.py` covers the rail and preflight checks.
+
+## Project layout
+
+```
+allot/
+  __main__.py     CLI: serve, mcp, health, parse, pay
+  parser.py       sentence -> validated instruction; rejects trading language
+  money.py        decimal allocation across the booked recipients
+  price.py        Binance last price, testnet then public mainnet
+  binance.py      Spot rail client: exchangeInfo, avgPrice, 24hr, depth, time
+  preflight.py    the seven checks against Binance's live rules
+  rails.py        composed rail views shared by HTTP and MCP
+  x402.py         x402 v2 PaymentRequired envelopes and B402 Bazaar discovery
+  execute.py      preparation: quote, rail, legs, receipt
+  receipt.py      canonical JSON, SHA-256, atomic storage, verification
+  server.py       HTTP API, HTTP 402 payout routes, static and app-shell serving
+  mcp_server.py   MCP over stdio
+web/              no-build frontend
+tests/            Python and Node test suites
+data/book.json    the fixed payout book
+```
+
+## Design principles
+
+- **Read-only against Binance.** Public endpoints only. No API key, no signing, no order placement, no custody.
+- **Every number is traceable.** If it is on the receipt, a named Binance read or a documented calculation produced it.
+- **Degrade, never fake.** An unreachable endpoint becomes a `skipped` check with the count recorded — not a plausible-looking default.
+- **The fences are code, not copy.** Trading language is refused by the parser; a presented payment signature is refused with 403.
+- **No hidden state.** Receipts are canonical JSON with a hash anyone can recompute offline.
+
+## Scope and limits
+
+**Working against live infrastructure**
+
+- Binance `USDCUSDT` last price — Spot Testnet, then the public mainnet ticker.
+- Binance exchange filters — pair status, lot step, min and max notional — applied per leg.
+- Binance rolling average price, 24h range, live order-book depth, and server-clock drift.
+- B402 Bazaar public resource discovery.
+- x402 v2 payment requirements, served as real HTTP 402 responses.
+
+**Deliberately not implemented**
+
+- No signature, no broadcast, no on-chain settlement.
+- No B402 merchant settle (`/papi/v2/b402/settle`) — that needs partner credentials Allot does not have.
+- No live Binance Pay.
+- No scheduler. Nothing recurs without a person asking for it.
+- Agentic Wallet can preview requirements locally (`baw x402-payment preview`); Allot never calls `sign` or `wallet send`.
+
+## Security
+
+Allot stores no credentials and needs none. It never holds funds, and `POST /payout/...` refuses a presented `PAYMENT-SIGNATURE` with 403 rather than attempting verification. Static file serving is path-contained; request bodies are capped at 256 KB; receipt writes are atomic and lock-guarded. Demo receipts are public within an instance — do not put anything private in a payout note.
+
+## Team
+
+Two-person build; the split is in [TEAM.md](TEAM.md). Submission details are in [SUBMISSION.md](SUBMISSION.md).
 
 ## License
 
-Hackathon demo. Testnet only. Not an offer to transmit money in production.
+MIT — see [LICENSE](LICENSE). The demo is testnet-only and is not an offer to transmit money in production.

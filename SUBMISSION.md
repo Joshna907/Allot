@@ -10,7 +10,11 @@ Repo: https://github.com/Joshna907/Allot
 2. Reply or quote-repost with: 90s video + GitHub + hosted demo URL.
 3. Complete the survey form. Do this early.
 
-Confirm Nigeria against Binance's live prohibited-countries list before posting.
+## Eligibility — read before posting
+
+Hackathon named exclusions: United States, United Kingdom, EEA, Hong Kong, Singapore. Nigeria is not on that named list, but Binance's live [List of Prohibited Countries](https://www.binance.com/en/terms) still has to be checked by the person submitting — naira rails are suspended, and this demo never touches NGN.
+
+Entry does not count without all three: follow + repost, reply with video and GitHub, **survey form**.
 
 ## Tweet
 
