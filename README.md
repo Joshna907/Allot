@@ -2,7 +2,7 @@
 
 Hackathon repo: [Joshna907/Allot](https://github.com/Joshna907/Allot). Two-person split: [`TEAM.md`](TEAM.md). Hosted demo: set `PUBLIC_BASE_URL` after the first Render deploy, then paste the HTTPS origin here.
 
-**Everyone built an agent that trades. This one pays.**
+**One budget. Everyone accounted for.**
 
 Allot is a cross-border payout agent for Binance Agent OS. A sender describes a payout book in plain English — *send $400 to three people monthly, 80% to spend, 20% held* — and Allot parses it, prices it on Binance, writes an [x402](https://developers.binance.com/en/docs/products/onchainpay-x402/introduction) envelope for each spend leg, and issues a receipt anyone can hash.
 
@@ -10,7 +10,7 @@ It is not a trading bot. It does not gate risk. It does not invent a fourth reci
 
 ## The gap
 
-Track A filled up with trader copilots and safety layers. The safety-layer lane already has Governor, CHARTER, Countersign, Magister, Haptix, Gate, and Deltr. The SMA20/50 lane is a pile of the same chart. Nobody shipped agent-driven **payments**. Nobody used x402 or Binance Pay for a non-trader.
+Allot explores a payments use case for non-traders: coordinating a fixed monthly allocation across three recipients, with an inspectable record of what was prepared.
 
 Remittance is the job most people actually have. Allot is the counter for that job.
 
@@ -48,7 +48,7 @@ Rail decision: **Wallet preview plus demo-only payout preparation. No signing.**
 | Kwame Boateng | Accra | 35% | studio invoice |
 | Elena Cruz | Manila | 25% | design retainer |
 
-$400 monthly. 80% ($320) is prepared as payment requirements. 20% ($80) stays held in the book. Pair is USDCUSDT.
+$400 monthly allocation. By default, 80% ($320) becomes payment requirements and 20% ($80) is excluded. Allot does not hold funds. Each preparation is manual; there is no automatic scheduler. Pair is USDCUSDT.
 
 ## Run it
 
@@ -63,9 +63,39 @@ python -m allot serve
 
 Then open [http://127.0.0.1:8765](http://127.0.0.1:8765). Desktop only. Fast probe: [http://127.0.0.1:8765/healthz](http://127.0.0.1:8765/healthz).
 
+The Python server hosts the complete no-build website. There is no `package.json` and no npm command:
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Product explanation and live payout-book preview |
+| `/app` | Book overview, recipients, draft, recent activity, rail availability |
+| `/app/prepare` | Recoverable describe, review, and preparation journey |
+| `/receipts` | Searchable shared demo activity |
+| `/receipts/{receipt_id}` | Inspect one receipt, its legs, evidence, and x402 requirements |
+| `/verify` | Verify a receipt by ID or SHA-256 hash |
+| `/how-it-works` | Nontechnical product flow, limitations, and troubleshooting |
+| `/writeup` | Hackathon implementation notes and boundaries |
+
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+Optional frontend component regression tests (Node is only a test runner, not an app dependency):
+
+```bash
+node --test tests/test_ui.mjs
+```
+
+Frontend modules: `web/app.js` (router), `web/product.js` (working pages),
+`web/public.js` (public pages), `web/ui.js` (shared components), `web/lib.js`
+(API and formatting), and token-based `web/styles.css`.
+See [UX handoff](UX_HANDOFF.md) for teammate integration details and verification evidence.
+
+The execute endpoint accepts an optional `request_id`. A bounded in-process cache
+reuses successful results for identical retry attempts (up to 256 recent attempts).
+It does not survive server restart. After an uncertain response, check activity
+before retrying. Receipt JSON can be downloaded from the existing receipt endpoint
+with `?download=1`.
 
 Environment:
 

@@ -22,6 +22,24 @@ from allot.x402 import encode_payment_required, payment_required
 
 
 class ParserBoundaryTests(unittest.TestCase):
+    def test_reversed_labelled_split(self) -> None:
+        instruction = parse_payout_book("send 400 dollars to three people monthly, 20% held and 80% to spend")
+        self.assertTrue(instruction["valid"])
+        self.assertEqual(instruction["spend_bps"], 8000)
+        self.assertEqual(instruction["hold_bps"], 2000)
+        self.assertEqual(instruction["totals"]["spend_usd"], "320.00")
+        self.assertEqual([row["usd"] for row in instruction["allocation"]], ["128.00", "112.00", "80.00", "80.00"])
+
+    def test_ambiguous_or_invalid_percentages_rejected(self) -> None:
+        for text in ("80% and 20%", "80% spend 30% held", "-80% spend 180% held", "80.5% spend 19.5% held", "80% spend", "20% held 80% held"):
+            with self.subTest(text=text):
+                self.assertFalse(parse_payout_book("send 400 dollars monthly " + text)["valid"])
+
+    def test_prefix_labels_and_custom_split(self) -> None:
+        instruction = parse_payout_book("send 400 dollars monthly, spend 70% and hold 30%")
+        self.assertTrue(instruction["valid"])
+        self.assertEqual(instruction["spend_bps"], 7000)
+
     def test_blank_fails(self) -> None:
         instruction = parse_payout_book("")
         self.assertFalse(instruction["valid"])
@@ -150,6 +168,8 @@ class HttpContractTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=5)
         self.tmp.cleanup()
         os.environ.pop("ALLOT_DATA_DIR", None)
         os.environ.pop("PUBLIC_BASE_URL", None)
@@ -174,6 +194,79 @@ class HttpContractTests(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 self.assertTrue(body["ok"])
             mocked.assert_not_called()
+
+    def test_public_routes_serve_application_shell(self) -> None:
+        for path in ("/", "/app", "/app/prepare", "/receipts", "/verify", "/how-it-works", "/writeup"):
+            with self.subTest(path=path):
+                with urlopen(self._url(path), timeout=5) as response:
+                    body = response.read().decode("utf-8")
+                    self.assertEqual(response.status, 200)
+                    self.assertIn('id="main-content"', body)
+                    self.assertIn('type="module" src="/app.js"', body)
+
+    def test_unknown_page_is_branded_shell_with_404(self) -> None:
+        try:
+            urlopen(self._url("/not-a-real-page"), timeout=5)
+            self.fail("expected 404")
+        except HTTPError as exc:
+            self.assertEqual(exc.code, 404)
+            self.assertIn('id="main-content"', exc.read().decode("utf-8"))
+            self.assertTrue(exc.headers.get_content_type().startswith("text/html"))
+
+    def test_frontend_modules_have_javascript_mime(self) -> None:
+        for asset in ("app.js", "lib.js", "ui.js", "product.js", "public.js"):
+            with urlopen(self._url("/" + asset), timeout=5) as response:
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.headers.get_content_type(), "text/javascript")
+
+    def test_same_attempt_returns_same_receipt_and_rejects_changed_text(self) -> None:
+        from allot.server import _PREPARED
+        _PREPARED.clear()
+        payload = {"text": "send 400 dollars monthly", "request_id": "regression-attempt-001"}
+        def request(data):
+            return urlopen(Request(self._url("/api/execute"), data=json.dumps(data).encode(), headers={"Content-Type": "application/json"}), timeout=5)
+        with patch("allot.server.execute_payout", return_value={"ok": True, "receipt_id": "ALLOT-RETRY"}) as execute:
+            with request(payload) as response:
+                first = json.loads(response.read())
+            with request(payload) as response:
+                self.assertEqual(json.loads(response.read()), first)
+            self.assertEqual(execute.call_count, 1)
+            with self.assertRaises(HTTPError) as raised:
+                request({**payload, "text": "a different instruction"})
+            self.assertEqual(raised.exception.code, 409)
+        _PREPARED.clear()
+
+    def test_unknown_api_is_json_404(self) -> None:
+        try:
+            urlopen(self._url("/api/not-a-real-endpoint"), timeout=5)
+            self.fail("expected 404")
+        except HTTPError as exc:
+            self.assertEqual(exc.code, 404)
+            self.assertEqual(exc.headers.get_content_type(), "application/json")
+            self.assertEqual(json.loads(exc.read())["error"], "Unknown endpoint.")
+
+    def test_unknown_asset_is_plain_404(self) -> None:
+        try:
+            urlopen(self._url("/missing.js"), timeout=5)
+            self.fail("expected 404")
+        except HTTPError as exc:
+            self.assertEqual(exc.code, 404)
+            self.assertEqual(exc.headers.get_content_type(), "text/plain")
+
+    def test_receipt_deep_link_uses_shell_and_missing_is_404(self) -> None:
+        save_receipt(attach_hash({"receipt_id": "ALLOT-DEEP-LINK", "legs": []}))
+        with urlopen(self._url("/receipts/ALLOT-DEEP-LINK"), timeout=5) as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn('id="main-content"', response.read().decode("utf-8"))
+        with urlopen(self._url("/api/receipts/ALLOT-DEEP-LINK?download=1"), timeout=5) as response:
+            self.assertEqual(response.headers.get("Content-Disposition"), 'attachment; filename="ALLOT-DEEP-LINK.json"')
+            self.assertEqual(json.loads(response.read())["receipt_id"], "ALLOT-DEEP-LINK")
+        try:
+            urlopen(self._url("/receipts/ALLOT-MISSING"), timeout=5)
+            self.fail("expected 404")
+        except HTTPError as exc:
+            self.assertEqual(exc.code, 404)
+            self.assertIn('id="main-content"', exc.read().decode("utf-8"))
 
     def test_execute_bazaar_outage_still_prepares(self) -> None:
         fake_quote = {

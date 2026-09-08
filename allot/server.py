@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from allot.config import host, port, public_base_url
 from allot.execute import execute_payout
@@ -31,6 +33,20 @@ MIME = {
     ".svg": "image/svg+xml",
     ".ico": "image/x-icon",
 }
+
+FRONTEND_ROUTES = {
+    "/",
+    "/app",
+    "/app/prepare",
+    "/receipts",
+    "/verify",
+    "/how-it-works",
+    "/writeup",
+}
+
+# A bounded retry cache for the current demo process. No funds are transferred.
+_PREPARE_LOCK = threading.Lock()
+_PREPARED: dict[str, tuple[str, dict]] = {}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -95,7 +111,11 @@ class Handler(BaseHTTPRequestHandler):
             if receipt is None:
                 self._json(404, {"ok": False, "error": "No receipt with that id or hash."})
                 return
-            self._json(200, receipt)
+            extra = None
+            if parse_qs(parsed.query).get("download") == ["1"]:
+                filename = re.sub(r"[^A-Za-z0-9_-]", "_", str(receipt.get("receipt_id", "allot-receipt")))
+                extra = {"Content-Disposition": f'attachment; filename="{filename}.json"'}
+            self._json(200, receipt, extra)
             return
         if path.startswith("/api/verify/"):
             receipt = find_receipt(unquote(path.split("/", 3)[-1]))
@@ -112,6 +132,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path.startswith("/payout/"):
             self._payout(path)
+            return
+        if path.startswith("/api/"):
+            self._json(404, {"ok": False, "error": "Unknown endpoint."})
+            return
+        if path in FRONTEND_ROUTES:
+            self._app_shell(200)
+            return
+        if path.startswith("/receipts/"):
+            receipt_id = unquote(path.split("/", 2)[-1])
+            self._app_shell(200 if find_receipt(receipt_id) is not None else 404)
+            return
+        if "." not in path.rsplit("/", 1)[-1]:
+            self._app_shell(404)
             return
         self._static(path)
 
@@ -139,7 +172,27 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, parse_payout_book(text))
             return
         if path == "/api/execute":
-            result = execute_payout(text)
+            request_id = str(payload.get("request_id") or "")
+            if request_id and not re.fullmatch(r"[A-Za-z0-9-]{8,80}", request_id):
+                self._json(400, {"ok": False, "error": "Invalid preparation request identifier."})
+                return
+            with _PREPARE_LOCK:
+                previous = _PREPARED.get(request_id) if request_id else None
+                if previous and previous[0] != text:
+                    self._json(409, {"ok": False, "error": "This attempt belongs to another instruction. Return to review and start a new attempt."})
+                    return
+                if previous:
+                    result = previous[1]
+                else:
+                    try:
+                        result = execute_payout(text)
+                    except Exception:
+                        self._json(503, {"ok": False, "error": "Preparation could not be confirmed. Check activity before retrying.", "retryable": True})
+                        return
+                    if request_id and result.get("ok"):
+                        if len(_PREPARED) >= 256:
+                            _PREPARED.pop(next(iter(_PREPARED)))
+                        _PREPARED[request_id] = (text, result)
             status = 200 if result.get("ok") else 422
             self._json(status, result)
             return
@@ -197,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(402, payload, extra={"PAYMENT-REQUIRED": header})
 
     def _static(self, path: str) -> None:
-        relative = "index.html" if path == "/" else path.lstrip("/")
+        relative = path.lstrip("/")
         target = (WEB_DIR / relative).resolve()
         if WEB_DIR.resolve() not in target.parents and target != WEB_DIR.resolve():
             self._json(403, {"ok": False, "error": "Forbidden."})
@@ -207,6 +260,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         content_type = MIME.get(target.suffix, "application/octet-stream")
         self._send(200, target.read_bytes(), content_type)
+
+    def _app_shell(self, status: int) -> None:
+        target = WEB_DIR / "index.html"
+        self._send(status, target.read_bytes(), MIME[".html"])
 
 
 def serve(bind_host: str | None = None, bind_port: int | None = None) -> None:

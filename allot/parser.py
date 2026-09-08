@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from allot.paths import load_book
+from allot.money import legs_from_instruction
 
 MONEY = re.compile(
     r"(?:usd\s*)?\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)"
@@ -34,13 +35,28 @@ def _money(text: str) -> Decimal | None:
 
 
 def _split(text: str) -> tuple[int, int] | None:
-    found = [int(value) for value in PCT.findall(text)]
-    if len(found) < 2:
+    matches = list(PCT.finditer(text))
+    if not matches:
         return None
-    spend, hold = found[0], found[1]
-    if spend + hold != 100:
-        return None
-    return spend * 100, hold * 100
+    if len(matches) != 2:
+        raise ValueError("Include exactly two percentages, labelled spend and held, adding up to 100%.")
+    values = [int(match.group(1)) for match in matches]
+    if sum(values) != 100 or any(value > 100 for value in values):
+        raise ValueError("Spend and held percentages must add up to 100%.")
+    if re.search(r"-\s*\d+\s*%|\d+\.\d+\s*%", text):
+        raise ValueError("Use whole, non-negative percentages for this demo.")
+    role_pattern = r"(spend|spending|held|hold|save|saved|reserve|reserved)\b"
+    roles = []
+    for index, match in enumerate(matches):
+        after = text[match.end():matches[index + 1].start() if index + 1 < len(matches) else len(text)]
+        before = text[matches[index - 1].end() if index else 0:match.start()]
+        suffix = re.match(r"\s*(?:(?:to|for|as)\s+)?" + role_pattern, after, re.I)
+        prefix = re.search(role_pattern + r"\s*[:=]?\s*$", before, re.I)
+        found = prefix if index == 0 and prefix else suffix or prefix
+        roles.append("spend" if found and found.group(1).lower() in ("spend", "spending") else "hold" if found else None)
+    if set(roles) != {"spend", "hold"}:
+        raise ValueError("Label both percentages clearly, for example: 80% to spend, 20% held.")
+    return values[roles.index("spend")] * 100, values[roles.index("hold")] * 100
 
 
 def parse_payout_book(text: str, book: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -75,12 +91,16 @@ def parse_payout_book(text: str, book: dict[str, Any] | None = None) -> dict[str
         warnings.append(f"You said ${amount}. The booked amount is ${booked}. Running the booked amount.")
         amount = booked
 
-    parsed_split = _split(source) if source else None
+    try:
+        parsed_split = _split(source) if source else None
+    except ValueError as exc:
+        errors.append(str(exc))
+        parsed_split = None
     spend_bps = book["spend_bps"]
     hold_bps = book["hold_bps"]
     if parsed_split is None:
         if source:
-            warnings.append("No 80/20 split found. Using the booked split: 80% spend, 20% held.")
+            warnings.append("No usable split found. The demo default is 80% spend, 20% held.")
     else:
         spend_bps, hold_bps = parsed_split
         if spend_bps != book["spend_bps"] or hold_bps != book["hold_bps"]:
@@ -107,4 +127,6 @@ def parse_payout_book(text: str, book: dict[str, Any] | None = None) -> dict[str
         "asset": book["asset"],
         "recipients": recipients,
     }
+    if instruction["valid"]:
+        instruction["allocation"], instruction["totals"] = legs_from_instruction(instruction)
     return instruction
