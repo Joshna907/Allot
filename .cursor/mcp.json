@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "binance-mcp-server": {
+      "url": "https://agent.binance.com/mcp/agentic"
+    },
+    "allot": {
+      "command": "python",
+      "args": ["-m", "allot", "mcp"]
+    }
+  }
+}

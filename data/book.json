@@ -1,0 +1,42 @@
+{
+  "pair": "USDCUSDT",
+  "quote_asset": "USD",
+  "settle_asset": "USDT",
+  "schedule": "monthly",
+  "gross_usd": "400.00",
+  "spend_bps": 8000,
+  "hold_bps": 2000,
+  "network": "eip155:56",
+  "asset": {
+    "symbol": "USDT",
+    "address": "0x55d398326f99059fF775485246999027B3197955",
+    "decimals": 18,
+    "name": "USDT"
+  },
+  "recipients": [
+    {
+      "id": "amara",
+      "name": "Amara Okafor",
+      "city": "Lagos",
+      "note": "rent and food",
+      "share_bps": 4000,
+      "pay_to": "0x4a110700a0a0a0a0a0a0a0a0a0a0a0a0a0a0a11a"
+    },
+    {
+      "id": "kwame",
+      "name": "Kwame Boateng",
+      "city": "Accra",
+      "note": "studio invoice",
+      "share_bps": 3500,
+      "pay_to": "0x4b0a1e000b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+    },
+    {
+      "id": "elena",
+      "name": "Elena Cruz",
+      "city": "Manila",
+      "note": "design retainer",
+      "share_bps": 2500,
+      "pay_to": "0xe1e1a000c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+    }
+  ]
+}

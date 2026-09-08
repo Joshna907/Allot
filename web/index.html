@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1100">
+  <title>Allot — payout book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gloock&family=Karla:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: oklch(0.955 0.022 88);
+      --paper-2: oklch(0.93 0.028 82);
+      --ink: oklch(0.22 0.028 48);
+      --ink-soft: oklch(0.38 0.03 48);
+      --rule: oklch(0.78 0.034 82);
+      --stamp: oklch(0.46 0.14 22);
+      --paid: oklch(0.36 0.07 155);
+      --held: oklch(0.42 0.05 70);
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 24px;
+      --space-2xl: 32px;
+      --space-3xl: 48px;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-width: 1100px; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 18px 18px, oklch(0.72 0.04 82 / 0.35) 1.1px, transparent 1.3px) 0 0 / 22px 22px,
+        var(--paper);
+      color: var(--ink);
+      font-family: Karla, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    button, textarea, input { font: inherit; color: inherit; }
+
+    .sheet {
+      width: min(1180px, calc(100vw - 64px));
+      margin: 40px auto 80px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--space-xl);
+      align-items: end;
+      padding-bottom: var(--space-xl);
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .mark {
+      font-family: Gloock, "Times New Roman", serif;
+      font-size: 4.5rem;
+      line-height: 0.9;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    .lede {
+      margin: var(--space-md) 0 0;
+      max-width: 42ch;
+      font-size: 1.15rem;
+    }
+
+    .meta {
+      text-align: right;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+
+    .meta strong {
+      display: block;
+      color: var(--ink);
+      font-size: 0.95rem;
+      letter-spacing: 0.04em;
+      text-transform: none;
+      margin-top: var(--space-xs);
+    }
+
+    .counter {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+      gap: var(--space-3xl);
+      margin-top: var(--space-3xl);
+      align-items: start;
+    }
+
+    label.kicker {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: var(--space-sm);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 148px;
+      resize: vertical;
+      border: 0;
+      border-bottom: 1px solid var(--ink);
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          transparent,
+          transparent 31px,
+          oklch(0.78 0.034 82 / 0.7) 31px,
+          oklch(0.78 0.034 82 / 0.7) 32px
+        );
+      padding: 4px 4px 12px 0;
+      line-height: 32px;
+      font-size: 1.2rem;
+      outline: none;
+    }
+
+    textarea:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 6px;
+    }
+
+    .actions {
+      display: flex;
+      gap: var(--space-lg);
+      align-items: center;
+      margin-top: var(--space-xl);
+    }
+
+    button.stamp {
+      appearance: none;
+      border: 1.5px solid var(--ink);
+      background: var(--ink);
+      color: var(--paper);
+      padding: 12px 22px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: transform 120ms var(--ease), background 120ms var(--ease), color 120ms var(--ease);
+    }
+
+    button.stamp:hover { background: oklch(0.16 0.03 48); }
+    button.stamp:active { transform: translateY(1px); }
+    button.stamp:focus-visible { outline: 2px solid var(--stamp); outline-offset: 3px; }
+    button.stamp:disabled { opacity: 0.55; cursor: wait; }
+
+    button.ghost {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      padding: 12px 0;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      cursor: pointer;
+    }
+
+    button.ghost:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+
+    .roster {
+      border-top: 1px solid var(--ink);
+      padding-top: var(--space-lg);
+    }
+
+    .roster h2 {
+      font-family: Gloock, serif;
+      font-size: 1.6rem;
+      font-weight: 400;
+      margin: 0 0 var(--space-lg);
+    }
+
+    .person {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: var(--space-md);
+      padding: var(--space-md) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .person .n {
+      font-variant-numeric: tabular-nums;
+      color: var(--ink-soft);
+      width: 1.4ch;
+    }
+
+    .person b { font-weight: 700; }
+    .person small { display: block; color: var(--ink-soft); font-size: 0.85rem; }
+    .person .share {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.85rem;
+      letter-spacing: 0.06em;
+    }
+
+    .notice {
+      margin-top: var(--space-xl);
+      color: var(--stamp);
+      min-height: 1.5em;
+    }
+
+    .paper {
+      margin-top: var(--space-3xl);
+      display: none;
+    }
+
+    .paper.show { display: block; animation: rise 420ms var(--ease); }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .receipt {
+      position: relative;
+      background: var(--paper-2);
+      border: 1px solid var(--ink);
+      padding: 36px 40px 36px 52px;
+      box-shadow: 8px 10px 0 oklch(0.22 0.028 48 / 0.08);
+    }
+
+    .receipt::before {
+      content: "";
+      position: absolute;
+      left: -1px;
+      top: -8px;
+      bottom: -8px;
+      width: 18px;
+      background:
+        radial-gradient(circle at 8px 10px, var(--paper) 5px, transparent 5.5px) 0 0 / 18px 20px;
+    }
+
+    .receipt-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: var(--space-xl);
+      margin-bottom: var(--space-xl);
+    }
+
+    .receipt h2 {
+      font-family: Gloock, serif;
+      font-size: 2.2rem;
+      font-weight: 400;
+      margin: 0;
+    }
+
+    .serial {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.08em;
+      font-size: 0.85rem;
+      text-align: right;
+    }
+
+    .mark-stamp {
+      position: absolute;
+      right: 56px;
+      top: 92px;
+      border: 2px solid var(--stamp);
+      color: var(--stamp);
+      padding: 8px 14px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+      transform: rotate(-12deg);
+      background: oklch(0.93 0.028 82 / 0.35);
+      pointer-events: none;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th {
+      text-align: left;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 500;
+      border-bottom: 1px solid var(--ink);
+      padding: 0 0 8px;
+    }
+
+    td {
+      padding: 12px 12px 12px 0;
+      border-bottom: 1px solid var(--rule);
+      vertical-align: top;
+    }
+
+    td:last-child, th:last-child { text-align: right; padding-right: 0; }
+    .muted { color: var(--ink-soft); }
+    .hold td { color: var(--held); }
+
+    .totals {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 32px;
+      margin-top: var(--space-xl);
+      max-width: 420px;
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hash {
+      margin-top: var(--space-2xl);
+      padding-top: var(--space-lg);
+      border-top: 1px dashed var(--ink);
+      font-size: 0.82rem;
+      word-break: break-all;
+    }
+
+    .bounds {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-2xl);
+      margin-top: var(--space-2xl);
+      font-size: 0.92rem;
+    }
+
+    .bounds h3 {
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin: 0 0 var(--space-sm);
+    }
+
+    .bounds ul { margin: 0; padding-left: 1.1em; }
+
+    footer {
+      margin-top: var(--space-3xl);
+      font-size: 0.8rem;
+      color: var(--ink-soft);
+      max-width: 70ch;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .paper.show, button.stamp { animation: none; transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <header>
+      <div>
+        <p class="mark">Allot</p>
+        <p class="lede">Everyone built an agent that trades. This one pays. Say the book. Get a receipt.</p>
+      </div>
+      <p class="meta">
+        Binance Agent OS · Track A
+        <strong>Testnet · USDCUSDT · three names · monthly</strong>
+      </p>
+    </header>
+
+    <div class="counter">
+      <form id="book-form">
+        <label class="kicker" for="book">The book</label>
+        <textarea id="book" name="book" spellcheck="false">send $400 to three people monthly, 80% to spend, 20% held</textarea>
+        <div class="actions">
+          <button class="stamp" id="run" type="submit">Price and send</button>
+          <button class="ghost" id="parse-only" type="button">Parse without sending</button>
+        </div>
+        <p class="notice" id="notice" role="status"></p>
+      </form>
+
+      <aside class="roster" id="roster">
+        <h2>The three</h2>
+      </aside>
+    </div>
+
+    <section class="paper" id="paper" aria-live="polite"></section>
+
+    <footer>
+      Settlement tonight is demo-testnet. Prices come from Binance. Envelopes are x402 v2.
+      On-chain B402 settle waits on merchant onboarding. MCP cannot withdraw.
+    </footer>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const bookEl = $("book");
+    const notice = $("notice");
+    const paper = $("paper");
+    const run = $("run");
+
+    const money = (value) => Number(value).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    async function api(path, options) {
+      const response = await fetch(path, options);
+      const data = await response.json();
+      if (!response.ok && !data.ok && data.error) throw new Error(data.error);
+      return data;
+    }
+
+    function roster(book) {
+      $("roster").innerHTML = `<h2>The three</h2>` + book.recipients.map((person, i) => `
+        <div class="person">
+          <span class="n">${String(i + 1).padStart(2, "0")}</span>
+          <div>
+            <b>${person.name}</b>
+            <small>${person.city} · ${person.note}</small>
+          </div>
+          <span class="share">${(person.share_bps / 100).toFixed(0)}%</span>
+        </div>
+      `).join("");
+    }
+
+    function renderReceipt(receipt) {
+      if (!receipt.ok) {
+        notice.textContent = (receipt.errors || ["The book did not run."]).join(" ");
+        paper.classList.remove("show");
+        return;
+      }
+      notice.textContent = "";
+      const spend = receipt.legs.filter((leg) => leg.role === "spend");
+      const hold = receipt.legs.find((leg) => leg.role === "hold");
+      paper.innerHTML = `
+        <article class="receipt">
+          <div class="mark-stamp">Testnet</div>
+          <div class="receipt-top">
+            <div>
+              <p class="kicker">Carbon copy</p>
+              <h2>Payout receipt</h2>
+            </div>
+            <p class="serial">
+              ${receipt.receipt_id}<br>
+              ${receipt.issued_at}<br>
+              ${receipt.quote.symbol} @ ${receipt.quote.price}<br>
+              ${receipt.quote.source}
+            </p>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Name</th><th>City</th><th>USD</th><th>USDT</th></tr>
+            </thead>
+            <tbody>
+              ${spend.map((leg) => `
+                <tr>
+                  <td>${leg.name}<div class="muted">${leg.note}</div></td>
+                  <td>${leg.city}</td>
+                  <td>${money(leg.usd)}</td>
+                  <td>${money(leg.usdt)}</td>
+                </tr>
+              `).join("")}
+              <tr class="hold">
+                <td>${hold.name}<div class="muted">${hold.note}</div></td>
+                <td>${hold.city}</td>
+                <td>${money(hold.usd)}</td>
+                <td>${money(hold.usdt)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="totals">
+            <span>Gross</span><span>$${money(receipt.totals.gross_usd)}</span>
+            <span>Sent</span><span>$${money(receipt.totals.spend_usd)}</span>
+            <span>Held</span><span>$${money(receipt.totals.hold_usd)}</span>
+          </div>
+          <p class="hash">
+            Hash ${receipt.receipt_hash}<br>
+            Pending: ${receipt.pending}
+          </p>
+          <div class="bounds">
+            <div>
+              <h3>What is real</h3>
+              <ul>${receipt.what_is_real.map((item) => `<li>${item}</li>`).join("")}</ul>
+            </div>
+            <div>
+              <h3>What is not</h3>
+              <ul>${receipt.what_is_not.map((item) => `<li>${item}</li>`).join("")}</ul>
+            </div>
+          </div>
+        </article>
+      `;
+      paper.classList.add("show");
+      paper.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    $("book-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      run.disabled = true;
+      run.textContent = "Pricing on Binance…";
+      notice.textContent = "";
+      try {
+        const receipt = await api("/api/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: bookEl.value })
+        });
+        renderReceipt(receipt);
+      } catch (error) {
+        notice.textContent = error.message || "The counter could not reach Allot.";
+      } finally {
+        run.disabled = false;
+        run.textContent = "Price and send";
+      }
+    });
+
+    $("parse-only").addEventListener("click", async () => {
+      notice.textContent = "";
+      const instruction = await api("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: bookEl.value })
+      });
+      if (!instruction.valid) {
+        notice.textContent = instruction.errors.join(" ");
+        return;
+      }
+      const notes = instruction.warnings.length
+        ? instruction.warnings.join(" ")
+        : "Instruction is on the book. Three names, monthly, USDCUSDT.";
+      notice.textContent = notes;
+    });
+
+    api("/api/book").then(roster).catch(() => {
+      notice.textContent = "Could not load the booked three. Is the Allot server running?";
+    });
+  </script>
+</body>
+</html>
