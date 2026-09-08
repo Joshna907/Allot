@@ -18,7 +18,7 @@ WEEKLY = re.compile(r"\b(weekly|every\s+week)\b", re.I)
 DAILY = re.compile(r"\b(daily|every\s+day)\b", re.I)
 TRADE = re.compile(
     r"\b(sma|ema|rsi|macd|signal|alpha|backtest)\d*\b"
-    r"|\blong\s+btc\b|\bshort\s+eth\b|\bbuy\s+btc\b|\bsell\s+eth\b",
+    r"|\b(buy|sell|swap|trade|trading|short|long|hedge|arbitrage|leverage|margin|futures|perp|perps)\b",
     re.I,
 )
 

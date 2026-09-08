@@ -25,6 +25,26 @@ class ParserTests(unittest.TestCase):
         instruction = parse_payout_book("buy BTCUSDT on SMA20/50 monthly")
         self.assertFalse(instruction["valid"])
 
+    def test_rejects_trading_the_judge_will_actually_type(self) -> None:
+        for sentence in (
+            "buy 2 BTC",
+            "sell everything",
+            "swap USDT for BTC",
+            "go long on ETH perps",
+            "hedge with futures",
+            "use 5x leverage",
+        ):
+            with self.subTest(sentence=sentence):
+                self.assertFalse(parse_payout_book(sentence)["valid"])
+
+    def test_the_booked_sentence_still_parses(self) -> None:
+        for sentence in (
+            "send $400 to three people monthly, 80% to spend, 20% held",
+            "pay three people $400 monthly with 80% spent and 20% held",
+        ):
+            with self.subTest(sentence=sentence):
+                self.assertTrue(parse_payout_book(sentence)["valid"])
+
     def test_rejects_weekly(self) -> None:
         instruction = parse_payout_book("send $400 to three people weekly")
         self.assertFalse(instruction["valid"])

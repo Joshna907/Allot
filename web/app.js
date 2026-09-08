@@ -63,8 +63,11 @@ function startProgress() {
   }, 420);
 }
 
+let onPaper = null;
+
 function renderReceipt(receipt) {
   preview.classList.remove("show");
+  onPaper = receipt.ok ? receipt : null;
   if (!receipt.ok) {
     notice.innerHTML =
       esc((receipt.errors || ["The book did not run."]).join(" ")) +
@@ -218,6 +221,22 @@ document.addEventListener("click", async (event) => {
   try {
     const result = await api("/api/verify/" + button.dataset.hash);
     out.textContent = result.ok ? " Hash matches the paper on disk." : " Hash does not match.";
+    return;
+  } catch (error) {
+    if (!onPaper) {
+      out.textContent = " " + (error.message || "Could not verify.");
+      return;
+    }
+  }
+  try {
+    const result = await api("/api/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(onPaper),
+    });
+    out.textContent = result.ok
+      ? " Hash matches. Recomputed from this receipt — the server's copy is gone."
+      : " Hash does not match.";
   } catch (error) {
     out.textContent = " " + (error.message || "Could not verify.");
   }
