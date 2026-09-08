@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import secrets
+import tempfile
+import threading
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
+from allot.config import data_dir, receipts_path
 from allot.money import usd
-from allot.paths import DATA_DIR, RECEIPTS_PATH
+
+_LOCK = threading.Lock()
 
 
 def canonical(payload: Any) -> str:
@@ -18,9 +25,9 @@ def sha256_hex(payload: Any) -> str:
     return hashlib.sha256(canonical(payload).encode("utf-8")).hexdigest()
 
 
-def new_receipt_id(issued_at: datetime) -> str:
-    stamp = issued_at.strftime("%Y%m%d-%H%M%S")
-    return f"ALLOT-{stamp}"
+def new_receipt_id(issued_at: datetime | None = None) -> str:
+    stamp = (issued_at or now_utc()).strftime("%Y%m%d-%H%M%S")
+    return f"ALLOT-{stamp}-{secrets.token_hex(2).upper()}"
 
 
 def now_utc() -> datetime:
@@ -28,28 +35,49 @@ def now_utc() -> datetime:
 
 
 def load_receipts() -> list[dict[str, Any]]:
-    if not RECEIPTS_PATH.exists():
+    path = receipts_path()
+    if not path.exists():
         return []
-    with RECEIPTS_PATH.open(encoding="utf-8") as handle:
-        data = json.load(handle)
+    try:
+        with path.open(encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return []
     if isinstance(data, list):
         return data
     return []
 
 
 def save_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    receipts = load_receipts()
-    receipts.insert(0, receipt)
-    with RECEIPTS_PATH.open("w", encoding="utf-8") as handle:
-        json.dump(receipts, handle, indent=2)
-        handle.write("\n")
+    directory = data_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    path = receipts_path()
+    with _LOCK:
+        receipts = load_receipts()
+        receipts.insert(0, receipt)
+        _atomic_write(path, receipts)
     return receipt
 
 
+def _atomic_write(path: Path, receipts: list[dict[str, Any]]) -> None:
+    fd, tmp_name = tempfile.mkstemp(prefix="receipts.", suffix=".json", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(receipts, handle, indent=2)
+            handle.write("\n")
+        os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
 def find_receipt(receipt_id: str) -> dict[str, Any] | None:
+    needle = (receipt_id or "").strip()
     for receipt in load_receipts():
-        if receipt.get("receipt_id") == receipt_id or receipt.get("receipt_hash") == receipt_id:
+        if receipt.get("receipt_id") == needle or receipt.get("receipt_hash") == needle:
             return receipt
     return None
 

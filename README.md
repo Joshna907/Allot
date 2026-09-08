@@ -1,6 +1,6 @@
 # Allot
 
-Hackathon repo: [Joshna907/PayoutPilot](https://github.com/Joshna907/PayoutPilot). Two-person split: [`TEAM.md`](TEAM.md).
+Hackathon repo: [Joshna907/Allot](https://github.com/Joshna907/Allot) (rename the current `PayoutPilot` remote if GitHub still shows that name). Two-person split: [`TEAM.md`](TEAM.md). Hosted demo: set `PUBLIC_BASE_URL` after the first Render deploy, then paste the HTTPS origin here.
 
 **Everyone built an agent that trades. This one pays.**
 
@@ -18,9 +18,9 @@ Remittance is the job most people actually have. Allot is the counter for that j
 
 1. **Parse.** A sentence becomes a validated instruction. Recipients, pair (`USDCUSDT`), and cadence (`monthly`) are the book. Off-book amounts snap back. Trading language is rejected.
 2. **Price.** Live last price from Binance Spot Testnet, with the public mainnet ticker as fallback.
-3. **Envelope.** Each spend leg is an x402 v2 `PaymentRequired` object for BSC USDT (`exact` scheme), plus the base64 `PAYMENT-REQUIRED` header the protocol expects.
-4. **Discover.** A real call to [B402 Bazaar](https://www.binance.com/bapi/ramp/v1/public/ramp/b402/bazaar/resources) — Binance's public x402 catalog.
-5. **Receipt.** Totals, pending settle, SHA-256 of the canonical JSON. Stored in `data/receipts.json`. No database, no accounts.
+3. **Requirements.** Each spend leg is an x402 v2 `PaymentRequired` object for BSC USDT (`exact` scheme), plus the Base64 `PAYMENT-REQUIRED` header. Validated through Agentic Wallet preview locally if `baw` is available. Allot never signs.
+4. **Discover.** A real call to [B402 Bazaar](https://www.binance.com/bapi/ramp/v1/public/ramp/b402/bazaar/resources). Failure is a warning; it does not block preparation.
+5. **Receipt.** Totals, pending confirmation, SHA-256 of the canonical JSON. Hosted receipts on Render live in `/tmp` and disappear after sleep/redeploy.
 
 ## What is real, and what is not
 
@@ -29,16 +29,16 @@ Say this out loud in the demo.
 **Real**
 
 - Binance `USDCUSDT` last price (testnet, then mainnet public ticker).
-- B402 Bazaar public discovery.
-- Protocol-correct x402 v2 payment envelopes.
+- B402 Bazaar public discovery (supporting evidence).
+- x402 v2 payment requirements, also served as HTTP 402.
 
-**Not real tonight**
+**Not settled**
 
-- On-chain `/papi/v2/b402/settle`. Binance hands that base URL out with a merchant `clientId`, RSA key, and IP allowlist. That is not a same-day signup.
-- Withdrawals through Agent OS MCP. The [MCP server](https://developers.binance.com/en/docs/agent-native/mcp-server/agentic) can price and trade inside an Agentic sub-account. It cannot send to an external address. That is why payouts are x402-shaped, not "transfer out via MCP".
-- Live Binance Pay. Demo Trading / testnet only.
+- No signature, no broadcast, no B402 merchant settle.
+- Agentic Wallet can preview requirements locally (`baw x402-payment preview`). Allot does not call `sign` or `wallet send`.
+- Live Binance Pay. Demo preview only.
 
-Rail decision, made when the settle docs said "please contact us for access": **x402 envelopes + Bazaar + Binance price + demo settle.** Named fallback. Not a quiet extension.
+Rail decision: **Wallet preview plus demo-only payout preparation. No signing.**
 
 ## The booked three
 
@@ -48,11 +48,11 @@ Rail decision, made when the settle docs said "please contact us for access": **
 | Kwame Boateng | Accra | 35% | studio invoice |
 | Elena Cruz | Manila | 25% | design retainer |
 
-$400 monthly. 80% ($320) is sent. 20% ($80) stays held in the book. Pair is USDCUSDT. Change the names in `data/book.json` after the hackathon, not during it.
+$400 monthly. 80% ($320) is prepared as payment requirements. 20% ($80) stays held in the book. Pair is USDCUSDT.
 
 ## Run it
 
-Python 3.11+. No third-party packages.
+Python 3.11+ locally (Render uses 3.13). No third-party packages.
 
 ```bash
 python -m allot health
@@ -61,11 +61,22 @@ python -m allot pay 'send $400 to three people monthly, 80% to spend, 20% held'
 python -m allot serve
 ```
 
-Then open [http://127.0.0.1:8765](http://127.0.0.1:8765). Desktop only.
+Then open [http://127.0.0.1:8765](http://127.0.0.1:8765). Desktop only. Fast probe: [http://127.0.0.1:8765/healthz](http://127.0.0.1:8765/healthz).
 
 ```bash
-python tests/test_allot.py
+python -m unittest discover -s tests -v
 ```
+
+Environment:
+
+| Variable | Local default | Render |
+| --- | --- | --- |
+| `HOST` | `127.0.0.1` | `0.0.0.0` |
+| `PORT` | `8765` | supplied by Render |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8765` | your `https://….onrender.com` |
+| `ALLOT_DATA_DIR` | `./data` | `/tmp/allot-data` |
+
+Deploy: `render.yaml` defines a free Python web service named `allot`, start `python -m allot serve`, health `/healthz`. Set `PUBLIC_BASE_URL` to the public HTTPS origin after the first deploy. Hosted receipts vanish when the free instance sleeps.
 
 ## Agent OS / MCP
 
@@ -75,7 +86,7 @@ Project `.cursor/mcp.json` points Cursor at Binance Agent OS:
 https://agent.binance.com/mcp/agentic
 ```
 
-Connect it in Cursor MCP settings and complete the Binance OAuth consent. Do not paste that URL into chat. After it is connected, ask: *Use the Binance MCP Server to show the current USDCUSDT price.*
+Agent OS MCP OAuth is optional. If Identification/KYC hangs, ship the counter anyway — prices still come from Binance Spot Testnet and B402 Bazaar.
 
 Allot also speaks MCP on stdio so an agent can parse and pay without the HTML counter:
 
@@ -83,13 +94,13 @@ Allot also speaks MCP on stdio so an agent can parse and pay without the HTML co
 python -m allot mcp
 ```
 
-Tools: `parse_payout_book`, `execute_payout`, `list_receipts`, `verify_receipt`.
+Tools: `parse_payout_book`, `execute_payout` (preparation only), `list_receipts`, `get_receipt`, `verify_receipt`.
 
 ## Why this shape
 
 Governor and Deltr placed on writeup as much as code. The sentence we are defending is not "we integrated five APIs". It is: **a non-trader can read the paper in fifteen seconds, and the paper tells the truth about the rail.**
 
-`execute_payout(instruction) -> receipt` is the whole execution module. The UI is a money-order counter, not a dashboard.
+`execute_payout(instruction) -> receipt` prepares payment requirements. It does not transfer money.
 
 ## Eligibility (read before you tweet)
 

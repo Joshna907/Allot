@@ -1,61 +1,27 @@
-# Two-person split — you and Joshna
+# Two-person split — Allot
 
-Repo: [PayoutPilot](https://github.com/Joshna907/PayoutPilot). Product name in the demo: **Allot**. Do not rename tonight.
+Repo: [Joshna907/Allot](https://github.com/Joshna907/Allot). Product name: **Allot**.
 
-Deadline: **8 Sept 2026, 23:59 UTC**. Submit at 80% rather than late.
+## You — runtime, receipts/API, demo UI, deploy, submission engineering
 
----
+Sections 1, 4, 5, 6 of the implementation plan.
 
-## You (this machine) — demo + rails
+- Env-driven host/port, `/healthz`, Render (`render.yaml`).
+- Receipt IDs, hashes, locks, HTTP 402, MCP tools.
+- Counter UI: Prepare payout, DEMO stamp, evidence, verify.
+- README / tweet copy / GitHub naming.
 
-You already have the code. You own anything that has to *run on screen*.
+Do not add a fourth recipient, a risk gate, or a trade view.
 
-| Own | Do not touch unless it is on fire |
-| --- | --- |
-| `allot/` (parser, price, x402, `execute_payout`, HTTP server, MCP stdio) | Survey form, the tweet, GitHub settings |
-| `web/index.html` (the counter the video points at) | Adding a fourth recipient, a risk gate, or a trading view |
-| Binance MCP OAuth in Cursor | Live mainnet funding |
-| Record the 90s video | |
+## Joshna — parser + x402/price rail (lanes 2 and 3)
 
-**Today, in order**
+- Natural-language book → instruction.
+- Binance USDCUSDT quote + fallback.
+- x402 `PaymentRequired` generation.
+- Optional local `baw x402-payment preview` (no sign, no send).
 
-1. Push this folder to Joshna’s repo (commands below). Tell her when it lands.
-2. Cursor → MCP → enable `binance-mcp-server` → finish Binance login. Ask: *Use the Binance MCP Server to show the current USDCUSDT price.*
-3. Confirm Nigeria on Binance’s live prohibited-countries list. If it is on that list, stop.
-4. `python -m allot serve` → [http://127.0.0.1:8765](http://127.0.0.1:8765) → record the video from `SUBMISSION.md`.
-5. Send Joshna the video file. Do not wait for the build to feel finished.
+If those files need a tweak for PUBLIC_BASE_URL or HTTP 402, coordinate — the contracts already expect `payment-required` legs and public payout URLs.
 
-If the platform fights you, the floor is still: testnet price + Bazaar ping + hashed receipt. That is enough to film.
+## Shared fences
 
----
-
-## Joshna — GitHub + entry paperwork
-
-She created the repo. She owns anything a judge sees *without running the app*.
-
-| Own | Do not rebuild |
-| --- | --- |
-| Repo public, README, LICENSE | `execute_payout`, x402, the HTML counter |
-| Follow @Binance + repost the announcement | New features after freeze |
-| Survey form (`SUBMISSION.md` has paste-ready answers) | |
-| Quote-repost / reply: video + GitHub URL | |
-
-**Today, in order**
-
-1. Wait for the first push, then make **PayoutPilot public**.
-2. Follow + repost **now**. Survey **now**. Do not leave either for 23:50.
-3. Hold a slot for the video. When the file arrives, post the reply/quote with video + `https://github.com/Joshna907/PayoutPilot`.
-4. If README needs a pass, edit `README.md` and `SUBMISSION.md` only.
-
-Tweet draft is in `SUBMISSION.md`. GitHub link in that draft is this repo.
-
----
-
-## Shared fences (both of you: the answer is no)
-
-- No risk-gate module. No SMA / signals / alpha.
-- Three recipients, `USDCUSDT`, monthly. Hardcoded in `data/book.json`.
-- No auth, no user accounts, no database.
-- Desktop only. Testnet / demo only.
-
-Talk in the group chat at freeze. Do not add a fifth lane after that.
+Three recipients, USDCUSDT, monthly. No auth, no database, no mobile, no mainnet funding, no signing.

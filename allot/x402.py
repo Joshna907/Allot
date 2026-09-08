@@ -50,7 +50,14 @@ def probe_bazaar() -> dict[str, Any]:
     }
 
 
-def payment_required(leg: dict[str, Any], usdt: Decimal, instruction: dict[str, Any]) -> dict[str, Any]:
+def payment_required(
+    leg: dict[str, Any],
+    usdt: Decimal,
+    instruction: dict[str, Any],
+    *,
+    receipt_id: str,
+    base_url: str,
+) -> dict[str, Any]:
     asset = instruction["asset"]
     pay_to = leg["pay_to"] or "merchant"
     amount = atomic_amount(usdt, int(asset["decimals"]))
@@ -58,7 +65,7 @@ def payment_required(leg: dict[str, Any], usdt: Decimal, instruction: dict[str, 
         "x402Version": 2,
         "error": "PAYMENT-SIGNATURE header is required",
         "resource": {
-            "url": f"https://allot.local/payout/{leg['recipient_id']}",
+            "url": f"{base_url.rstrip('/')}/payout/{receipt_id}/{leg['recipient_id']}",
             "description": f"Monthly spend leg for {leg['name']} in {leg['city']}",
             "mimeType": "application/json",
             "serviceName": "Allot payout book",

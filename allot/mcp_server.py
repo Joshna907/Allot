@@ -23,7 +23,7 @@ TOOLS = [
     },
     {
         "name": "execute_payout",
-        "description": "Price the booked payout on Binance, emit x402 PaymentRequired envelopes, settle on the demo rail, and return a verifiable receipt.",
+        "description": "Prepare x402 payment requirements and a hashed receipt. Does not transfer money, sign, or settle.",
         "inputSchema": {
             "type": "object",
             "properties": {"text": {"type": "string", "description": "The sentence said at the counter."}},
@@ -31,9 +31,23 @@ TOOLS = [
         },
     },
     {
+        "name": "probe_rails",
+        "description": "Ping Binance testnet USDCUSDT and B402 Bazaar. Does not need Agent OS OAuth or KYC.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "list_receipts",
         "description": "List stored Allot receipts from the JSON file on disk.",
         "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_receipt",
+        "description": "Load one stored receipt by id or hash.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"receipt_id": {"type": "string"}},
+            "required": ["receipt_id"],
+        },
     },
     {
         "name": "verify_receipt",
@@ -61,8 +75,15 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
         return _ok(parse_payout_book(str(arguments.get("text") or "")))
     if name == "execute_payout":
         return _ok(execute_payout(str(arguments.get("text") or "")))
+    if name == "probe_rails":
+        return _ok(health())
     if name == "list_receipts":
         return _ok(load_receipts())
+    if name == "get_receipt":
+        receipt = find_receipt(str(arguments.get("receipt_id") or ""))
+        if receipt is None:
+            return _err("No receipt with that id or hash.")
+        return _ok(receipt)
     if name == "verify_receipt":
         receipt = find_receipt(str(arguments.get("receipt_id") or ""))
         if receipt is None:
@@ -144,5 +165,5 @@ def health() -> dict[str, Any]:
             "ok": bazaar.get("ok"),
             "listed_resources": bazaar.get("listed_resources"),
         },
-        "rail": "x402-envelope + b402-bazaar + binance-price + demo-settle",
+        "rail": "x402 payment-requirements + binance-price + optional bazaar",
     }

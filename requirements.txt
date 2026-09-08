@@ -1,1 +1,1 @@
-# Stdlib only. Python 3.11 or newer.
+# Stdlib only. Python 3.11+ locally; Render uses 3.13.

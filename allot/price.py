@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -31,6 +32,7 @@ def fetch_pair_price(symbol: str = "USDCUSDT") -> dict[str, Any]:
                 "price": str(price),
                 "source": source,
                 "url": url,
+                "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
         except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as exc:
             errors.append(f"{source}: {exc}")

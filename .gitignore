@@ -7,3 +7,6 @@ venv/
 data/receipts.json
 .DS_Store
 _mcp_docs.md
+.cursor/binance-oauth-client.json
+baw-preview.json
+wallet-preview.json

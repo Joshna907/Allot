@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
+from allot.config import ROOT, book_path, data_dir, receipts_path
+
 WEB_DIR = ROOT / "web"
-BOOK_PATH = DATA_DIR / "book.json"
-RECEIPTS_PATH = DATA_DIR / "receipts.json"
+DATA_DIR = data_dir()
+BOOK_PATH = book_path()
+RECEIPTS_PATH = receipts_path()
 
 
 def load_book() -> dict[str, Any]:
-    with BOOK_PATH.open(encoding="utf-8") as handle:
+    with book_path().open(encoding="utf-8") as handle:
         return json.load(handle)

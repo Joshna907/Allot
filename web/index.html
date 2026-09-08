@@ -85,6 +85,8 @@
       letter-spacing: 0.04em;
       text-transform: none;
       margin-top: var(--space-xs);
+      font-variant-numeric: tabular-nums;
+      max-width: 36ch;
     }
 
     .counter {
@@ -260,17 +262,51 @@
 
     .mark-stamp {
       position: absolute;
-      right: 56px;
-      top: 92px;
+      right: 40px;
+      top: 84px;
       border: 2px solid var(--stamp);
       color: var(--stamp);
-      padding: 8px 14px;
-      letter-spacing: 0.22em;
+      padding: 10px 14px;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       font-weight: 700;
-      transform: rotate(-12deg);
-      background: oklch(0.93 0.028 82 / 0.35);
+      font-size: 0.85rem;
+      text-align: center;
+      line-height: 1.25;
+      transform: rotate(-11deg);
+      background: oklch(0.93 0.028 82 / 0.55);
       pointer-events: none;
+      max-width: 11rem;
+    }
+
+    details.evidence {
+      margin-top: var(--space-md);
+    }
+
+    details.evidence summary {
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .copy-row {
+      display: flex;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+      margin-top: var(--space-sm);
+    }
+
+    pre.payload {
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-size: 0.75rem;
+      max-height: 12rem;
+      overflow: auto;
+      background: oklch(0.97 0.01 88);
+      padding: var(--space-md);
+    }
+
+    .retry {
+      margin-left: var(--space-md);
     }
 
     table {
@@ -354,8 +390,8 @@
         <p class="lede">Everyone built an agent that trades. This one pays. Say the book. Get a receipt.</p>
       </div>
       <p class="meta">
-        Binance Agent OS · Track A
-        <strong>Testnet · USDCUSDT · three names · monthly</strong>
+        Binance Agent OS · Track A · live rail
+        <strong id="rail-line">Reading USDCUSDT from Binance…</strong>
       </p>
     </header>
 
@@ -364,7 +400,7 @@
         <label class="kicker" for="book">The book</label>
         <textarea id="book" name="book" spellcheck="false">send $400 to three people monthly, 80% to spend, 20% held</textarea>
         <div class="actions">
-          <button class="stamp" id="run" type="submit">Price and send</button>
+          <button class="stamp" id="run" type="submit">Prepare payout</button>
           <button class="ghost" id="parse-only" type="button">Parse without sending</button>
         </div>
         <p class="notice" id="notice" role="status"></p>
@@ -378,153 +414,11 @@
     <section class="paper" id="paper" aria-live="polite"></section>
 
     <footer>
-      Settlement tonight is demo-testnet. Prices come from Binance. Envelopes are x402 v2.
-      On-chain B402 settle waits on merchant onboarding. MCP cannot withdraw.
+      Settlement is a demo preview. Prices come from Binance Spot Testnet. Requirements are x402 v2.
+      Allot never signs or broadcasts. Hosted receipts on Render are ephemeral.
     </footer>
   </div>
 
-  <script>
-    const $ = (id) => document.getElementById(id);
-    const bookEl = $("book");
-    const notice = $("notice");
-    const paper = $("paper");
-    const run = $("run");
-
-    const money = (value) => Number(value).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-
-    async function api(path, options) {
-      const response = await fetch(path, options);
-      const data = await response.json();
-      if (!response.ok && !data.ok && data.error) throw new Error(data.error);
-      return data;
-    }
-
-    function roster(book) {
-      $("roster").innerHTML = `<h2>The three</h2>` + book.recipients.map((person, i) => `
-        <div class="person">
-          <span class="n">${String(i + 1).padStart(2, "0")}</span>
-          <div>
-            <b>${person.name}</b>
-            <small>${person.city} · ${person.note}</small>
-          </div>
-          <span class="share">${(person.share_bps / 100).toFixed(0)}%</span>
-        </div>
-      `).join("");
-    }
-
-    function renderReceipt(receipt) {
-      if (!receipt.ok) {
-        notice.textContent = (receipt.errors || ["The book did not run."]).join(" ");
-        paper.classList.remove("show");
-        return;
-      }
-      notice.textContent = "";
-      const spend = receipt.legs.filter((leg) => leg.role === "spend");
-      const hold = receipt.legs.find((leg) => leg.role === "hold");
-      paper.innerHTML = `
-        <article class="receipt">
-          <div class="mark-stamp">Testnet</div>
-          <div class="receipt-top">
-            <div>
-              <p class="kicker">Carbon copy</p>
-              <h2>Payout receipt</h2>
-            </div>
-            <p class="serial">
-              ${receipt.receipt_id}<br>
-              ${receipt.issued_at}<br>
-              ${receipt.quote.symbol} @ ${receipt.quote.price}<br>
-              ${receipt.quote.source}
-            </p>
-          </div>
-          <table>
-            <thead>
-              <tr><th>Name</th><th>City</th><th>USD</th><th>USDT</th></tr>
-            </thead>
-            <tbody>
-              ${spend.map((leg) => `
-                <tr>
-                  <td>${leg.name}<div class="muted">${leg.note}</div></td>
-                  <td>${leg.city}</td>
-                  <td>${money(leg.usd)}</td>
-                  <td>${money(leg.usdt)}</td>
-                </tr>
-              `).join("")}
-              <tr class="hold">
-                <td>${hold.name}<div class="muted">${hold.note}</div></td>
-                <td>${hold.city}</td>
-                <td>${money(hold.usd)}</td>
-                <td>${money(hold.usdt)}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="totals">
-            <span>Gross</span><span>$${money(receipt.totals.gross_usd)}</span>
-            <span>Sent</span><span>$${money(receipt.totals.spend_usd)}</span>
-            <span>Held</span><span>$${money(receipt.totals.hold_usd)}</span>
-          </div>
-          <p class="hash">
-            Hash ${receipt.receipt_hash}<br>
-            Pending: ${receipt.pending}
-          </p>
-          <div class="bounds">
-            <div>
-              <h3>What is real</h3>
-              <ul>${receipt.what_is_real.map((item) => `<li>${item}</li>`).join("")}</ul>
-            </div>
-            <div>
-              <h3>What is not</h3>
-              <ul>${receipt.what_is_not.map((item) => `<li>${item}</li>`).join("")}</ul>
-            </div>
-          </div>
-        </article>
-      `;
-      paper.classList.add("show");
-      paper.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    $("book-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      run.disabled = true;
-      run.textContent = "Pricing on Binance…";
-      notice.textContent = "";
-      try {
-        const receipt = await api("/api/execute", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: bookEl.value })
-        });
-        renderReceipt(receipt);
-      } catch (error) {
-        notice.textContent = error.message || "The counter could not reach Allot.";
-      } finally {
-        run.disabled = false;
-        run.textContent = "Price and send";
-      }
-    });
-
-    $("parse-only").addEventListener("click", async () => {
-      notice.textContent = "";
-      const instruction = await api("/api/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: bookEl.value })
-      });
-      if (!instruction.valid) {
-        notice.textContent = instruction.errors.join(" ");
-        return;
-      }
-      const notes = instruction.warnings.length
-        ? instruction.warnings.join(" ")
-        : "Instruction is on the book. Three names, monthly, USDCUSDT.";
-      notice.textContent = notes;
-    });
-
-    api("/api/book").then(roster).catch(() => {
-      notice.textContent = "Could not load the booked three. Is the Allot server running?";
-    });
-  </script>
+  <script src="/app.js"></script>
 </body>
 </html>
