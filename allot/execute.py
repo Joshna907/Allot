@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from typing import Any
 
+from allot.binance import market_snapshot, public_view
 from allot.config import public_base_url
 from allot.money import legs_from_instruction, usd
 from allot.parser import parse_payout_book
+from allot.preflight import preflight
 from allot.price import fetch_pair_price
 from allot.receipt import attach_hash, new_receipt_id, now_utc, save_receipt, sha256_hex, usdt_from_usd
 from allot.x402 import encode_payment_required, payment_required, probe_bazaar
 
 WHAT_IS_REAL = [
     "Binance USDCUSDT last price (testnet, then mainnet public ticker).",
+    "Binance exchange filters: pair status, lot step, and minimum notional, applied to every leg.",
+    "Binance rolling average price, 24h range, and live order book depth behind the conversion preview.",
     "x402 v2 PaymentRequired payloads for each spend leg (BSC USDT, exact scheme).",
     "HTTP 402 endpoints that return those requirements. Settlement is disabled.",
 ]
@@ -44,7 +49,12 @@ def execute_payout(instruction: dict[str, Any] | str) -> dict[str, Any]:
             "retryable": True,
         }
 
-    bazaar = probe_bazaar()
+    # Bazaar discovery and the Binance reads are independent; overlap them.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        bazaar_job = pool.submit(probe_bazaar)
+        snapshot_job = pool.submit(market_snapshot, instruction["pair"])
+        bazaar = bazaar_job.result()
+        snapshot = snapshot_job.result()
     price = Decimal(quote["price"])
     spend_legs, totals = legs_from_instruction(instruction)
     issued = now_utc()
@@ -110,15 +120,21 @@ def execute_payout(instruction: dict[str, Any] | str) -> dict[str, Any]:
             "spend_usdt": str(usd(sum((Decimal(leg["usdt"]) for leg in legs if leg["role"] == "spend"), Decimal("0")))),
             "hold_usdt": next(leg["usdt"] for leg in legs if leg["role"] == "hold"),
         },
+        "binance": public_view(snapshot),
         "evidence": {
             "binance_price": True,
             "bazaar_discovery": bool(bazaar.get("ok")),
+            "exchange_filters": bool((snapshot.get("rules") or {}).get("ok")),
+            "order_book_depth": bool((snapshot.get("book") or {}).get("ok")),
+            "server_time_sync": bool((snapshot.get("server_time") or {}).get("ok")),
+            "binance_reads": f"{snapshot.get('reachable')}/{snapshot.get('reads')}",
             "wallet_preview": "not-run",
         },
         "pending": "User confirmation, signature and on-chain settlement",
         "what_is_real": WHAT_IS_REAL,
         "what_remains": WHAT_REMAINS,
     }
+    receipt["preflight"] = preflight(instruction, legs, quote, snapshot)
     attach_hash(receipt)
     save_receipt(receipt)
     return receipt

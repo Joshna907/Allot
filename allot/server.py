@@ -11,6 +11,7 @@ from allot.execute import execute_payout
 from allot.mcp_server import health
 from allot.parser import parse_payout_book
 from allot.paths import WEB_DIR, load_book
+from allot.rails import DEFAULT_SYMBOL, dry_run, liquidity, rail_status, symbol_rules
 from allot.receipt import find_receipt, load_receipts, verify_receipt
 
 MAX_BODY_BYTES = 256 * 1024
@@ -103,6 +104,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/book":
             self._json(200, load_book())
             return
+        query = parse_qs(parsed.query)
+        symbol = (query.get("symbol") or [DEFAULT_SYMBOL])[0].upper()
+        if path == "/api/rails":
+            self._json(200, rail_status(symbol))
+            return
+        if path == "/api/exchange-rules":
+            rules = symbol_rules(symbol)
+            self._json(200 if rules.get("ok") else 502, rules)
+            return
+        if path == "/api/liquidity":
+            report = liquidity(symbol, (query.get("usd") or query.get("amount") or ["320"])[0])
+            self._json(200 if report.get("ok") else 502, report)
+            return
         if path == "/api/receipts":
             self._json(200, load_receipts())
             return
@@ -170,6 +184,10 @@ class Handler(BaseHTTPRequestHandler):
         text = str(payload.get("text") or "")
         if path == "/api/parse":
             self._json(200, parse_payout_book(text))
+            return
+        if path == "/api/preflight":
+            report = dry_run(text, str(payload.get("symbol") or "").upper() or None)
+            self._json(200 if report.get("ok") else 422, report)
             return
         if path == "/api/execute":
             request_id = str(payload.get("request_id") or "")

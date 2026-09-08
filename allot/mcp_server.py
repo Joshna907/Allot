@@ -8,6 +8,7 @@ from allot.execute import execute_payout
 from allot.parser import parse_payout_book
 from allot.paths import load_book
 from allot.price import fetch_pair_price
+from allot.rails import DEFAULT_SYMBOL, dry_run, liquidity, rail_status, symbol_rules
 from allot.receipt import find_receipt, load_receipts, verify_receipt
 from allot.x402 import probe_bazaar
 
@@ -39,6 +40,43 @@ TOOLS = [
         "name": "probe_rails",
         "description": "Ping Binance testnet USDCUSDT and B402 Bazaar. Does not need Agent OS OAuth or KYC.",
         "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "binance_rail_status",
+        "description": "Read the whole Binance Spot rail Allot depends on: pair status, exchange filters, last and rolling average price, 24h range, live book spread, server-clock drift, and B402 Bazaar discovery. Public data only — no API key, no KYC.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"symbol": {"type": "string", "description": "Spot symbol, default USDCUSDT."}},
+        },
+    },
+    {
+        "name": "exchange_rules",
+        "description": "Binance's own trading rules for the pair: TRADING status, tick size, lot step, minimum and maximum notional, permissions. These are the constraints Allot sizes payouts against.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"symbol": {"type": "string", "description": "Spot symbol, default USDCUSDT."}},
+        },
+    },
+    {
+        "name": "check_liquidity",
+        "description": "Walk the live Binance order book for a payout-sized conversion and report average fill, slippage in bps, and levels consumed. Read-only depth walk; no order is placed.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "amount": {"type": "string", "description": "Size to convert, in the base asset."},
+                "symbol": {"type": "string", "description": "Spot symbol, default USDCUSDT."},
+            },
+            "required": ["amount"],
+        },
+    },
+    {
+        "name": "preflight_payout",
+        "description": "Run every Binance rule check over a payout sentence without issuing a receipt: pair status, per-leg minimum notional, lot step, price band against the rolling average, book depth, and clock sync.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"text": {"type": "string", "description": "The sentence said at the counter."}},
+            "required": ["text"],
+        },
     },
     {
         "name": "list_receipts",
@@ -86,6 +124,15 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
         return _ok(execute_payout(str(arguments.get("text") or "")))
     if name == "probe_rails":
         return _ok(health())
+    if name == "binance_rail_status":
+        return _ok(rail_status(str(arguments.get("symbol") or DEFAULT_SYMBOL).upper()))
+    if name == "exchange_rules":
+        return _ok(symbol_rules(str(arguments.get("symbol") or DEFAULT_SYMBOL).upper()))
+    if name == "check_liquidity":
+        report = liquidity(str(arguments.get("symbol") or DEFAULT_SYMBOL).upper(), str(arguments.get("amount") or "0"))
+        return _ok(report) if report.get("ok") else _err(str(report.get("error") or "Liquidity unavailable."))
+    if name == "preflight_payout":
+        return _ok(dry_run(str(arguments.get("text") or "")))
     if name == "list_receipts":
         return _ok(load_receipts())
     if name == "get_receipt":
