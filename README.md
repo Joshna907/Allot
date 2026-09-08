@@ -1,6 +1,6 @@
 # Allot
 
-Hackathon repo: [Joshna907/Allot](https://github.com/Joshna907/Allot) (rename the current `PayoutPilot` remote if GitHub still shows that name). Two-person split: [`TEAM.md`](TEAM.md). Hosted demo: set `PUBLIC_BASE_URL` after the first Render deploy, then paste the HTTPS origin here.
+Hackathon repo: [Joshna907/Allot](https://github.com/Joshna907/Allot). Two-person split: [`TEAM.md`](TEAM.md). Hosted demo: set `PUBLIC_BASE_URL` after the first Render deploy, then paste the HTTPS origin here.
 
 **Everyone built an agent that trades. This one pays.**
 
