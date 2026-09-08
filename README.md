@@ -94,7 +94,7 @@ Allot also speaks MCP on stdio so an agent can parse and pay without the HTML co
 python -m allot mcp
 ```
 
-Tools: `parse_payout_book`, `execute_payout` (preparation only), `list_receipts`, `get_receipt`, `verify_receipt`.
+Tools: `get_payout_book`, `parse_payout_book`, `execute_payout` (preparation only), `list_receipts`, `get_receipt`, `verify_receipt`.
 
 ## Why this shape
 

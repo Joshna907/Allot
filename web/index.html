@@ -207,6 +207,20 @@
       min-height: 1.5em;
     }
 
+    .preview {
+      display: none;
+      margin-top: var(--space-xl);
+      padding: var(--space-lg) 0;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .preview.show { display: block; animation: rise 300ms var(--ease); }
+    .preview h2 { font-family: Gloock, serif; font-size: 1.4rem; font-weight: 400; margin: 0 0 var(--space-sm); }
+    .preview p { margin: 0; }
+    .preview .preview-total { font-size: 1.5rem; margin-top: var(--space-md); }
+    .preview .warnings { color: var(--stamp); margin-top: var(--space-sm); }
+
     .paper {
       margin-top: var(--space-3xl);
       display: none;
@@ -404,6 +418,7 @@
           <button class="ghost" id="parse-only" type="button">Parse without sending</button>
         </div>
         <p class="notice" id="notice" role="status"></p>
+        <section class="preview" id="preview" aria-live="polite"></section>
       </form>
 
       <aside class="roster" id="roster">

@@ -3,6 +3,7 @@ const bookEl = $("book");
 const notice = $("notice");
 const paper = $("paper");
 const run = $("run");
+const preview = $("preview");
 const STEPS = [
   "Parsing payout book",
   "Fetching Binance price",
@@ -63,6 +64,7 @@ function startProgress() {
 }
 
 function renderReceipt(receipt) {
+  preview.classList.remove("show");
   if (!receipt.ok) {
     notice.innerHTML =
       esc((receipt.errors || ["The book did not run."]).join(" ")) +
@@ -223,18 +225,31 @@ document.addEventListener("click", async (event) => {
 
 $("parse-only").addEventListener("click", async () => {
   notice.textContent = "";
-  const instruction = await api("/api/parse", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: bookEl.value }),
-  });
-  if (!instruction.valid) {
-    notice.textContent = instruction.errors.join(" ");
-    return;
+  try {
+    const instruction = await api("/api/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: bookEl.value }),
+    });
+    if (!instruction.valid) {
+      preview.classList.remove("show");
+      notice.textContent = instruction.errors.join(" ");
+      return;
+    }
+    const warnings = instruction.warnings.length
+      ? `<p class="warnings">${esc(instruction.warnings.join(" "))}</p>`
+      : "";
+    preview.innerHTML = `
+      <h2>Book checked</h2>
+      <p>Three people, ${esc(instruction.schedule)}, ${esc(instruction.pair)}. ${instruction.spend_bps / 100}% is prepared to send and ${instruction.hold_bps / 100}% stays held.</p>
+      <p class="preview-total">$${money(instruction.gross_usd)} booked</p>
+      ${warnings}
+    `;
+    preview.classList.add("show");
+  } catch (error) {
+    preview.classList.remove("show");
+    notice.textContent = error.message || "The counter could not check this book.";
   }
-  notice.textContent = instruction.warnings.length
-    ? instruction.warnings.join(" ")
-    : "Instruction is on the book. Three names, monthly, USDCUSDT.";
 });
 
 api("/api/health")

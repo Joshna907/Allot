@@ -46,6 +46,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length") or "0")
+        if length > 16_384:
+            raise ValueError("Body is too large.")
         raw = self.rfile.read(length) if length else b"{}"
         if not raw:
             return {}
@@ -103,8 +105,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self._read_json()
-        except json.JSONDecodeError:
-            self._json(400, {"ok": False, "error": "Body must be JSON."})
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._json(400, {"ok": False, "error": str(exc) or "Body must be JSON."})
             return
         text = str(payload.get("text") or "")
         if path == "/api/parse":

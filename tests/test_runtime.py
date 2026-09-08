@@ -30,6 +30,22 @@ class ParserBoundaryTests(unittest.TestCase):
         instruction = parse_payout_book("send $400 to three people daily")
         self.assertFalse(instruction["valid"])
 
+    def test_misconfigured_roster_fails(self) -> None:
+        book = {
+            "gross_usd": "400.00",
+            "spend_bps": 8000,
+            "hold_bps": 2000,
+            "pair": "USDCUSDT",
+            "quote_asset": "USD",
+            "settle_asset": "USDT",
+            "network": "eip155:56",
+            "asset": {},
+            "recipients": [{"share_bps": 10_000}],
+        }
+        instruction = parse_payout_book("send $400 monthly", book)
+        self.assertFalse(instruction["valid"])
+        self.assertTrue(any("roster" in error for error in instruction["errors"]))
+
 
 class ReceiptStoreTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -211,6 +227,12 @@ class McpTests(unittest.TestCase):
         result = call_tool("parse_payout_book", {"text": "send $400 to three people monthly, 80% to spend, 20% held"})
         payload = json.loads(result["content"][0]["text"])
         self.assertTrue(payload["valid"])
+
+    def test_get_payout_book_call(self) -> None:
+        self.assertIn("get_payout_book", {tool["name"] for tool in TOOLS})
+        result = call_tool("get_payout_book", {})
+        self.assertFalse(result.get("isError", False))
+        self.assertIn("Amara Okafor", result["content"][0]["text"])
 
 
 if __name__ == "__main__":

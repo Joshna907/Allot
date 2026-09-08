@@ -13,6 +13,11 @@ from allot.x402 import probe_bazaar
 
 TOOLS = [
     {
+        "name": "get_payout_book",
+        "description": "Return Allot's fixed payout roster, monthly schedule, currency pair, and spend/hold split.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "parse_payout_book",
         "description": "Turn a plain-English payout book into a validated Allot instruction. Recipients, pair, and monthly cadence are hardcoded.",
         "inputSchema": {
@@ -71,6 +76,8 @@ def _err(message: str) -> dict[str, Any]:
 
 def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
     arguments = arguments or {}
+    if name == "get_payout_book":
+        return _ok(load_book())
     if name == "parse_payout_book":
         return _ok(parse_payout_book(str(arguments.get("text") or "")))
     if name == "execute_payout":

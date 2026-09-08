@@ -86,6 +86,11 @@ def parse_payout_book(text: str, book: dict[str, Any] | None = None) -> dict[str
         if spend_bps != book["spend_bps"] or hold_bps != book["hold_bps"]:
             warnings.append("Off-book split. Recipients stay the booked three; the split follows your sentence.")
 
+    recipients = book.get("recipients") or []
+    recipient_total = sum(int(row.get("share_bps") or 0) for row in recipients)
+    if len(recipients) != 3 or recipient_total != 10_000:
+        errors.append("The payout roster is not configured correctly. It must contain three recipients whose shares add to 100%.")
+
     instruction = {
         "source_text": source,
         "valid": not errors,
@@ -100,6 +105,6 @@ def parse_payout_book(text: str, book: dict[str, Any] | None = None) -> dict[str
         "hold_bps": hold_bps,
         "network": book["network"],
         "asset": book["asset"],
-        "recipients": book["recipients"],
+        "recipients": recipients,
     }
     return instruction
