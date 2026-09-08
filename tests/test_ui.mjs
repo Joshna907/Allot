@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
+import {access,readFile} from "node:fs/promises";
 const file = name => readFile(new URL("../web/"+name,import.meta.url),"utf8");
+const asset = name => access(new URL("../web/"+name,import.meta.url));
 const moduleURL = source => "data:text/javascript;base64,"+Buffer.from(source).toString("base64");
 const libURL=moduleURL(await file("lib.js"));
 const lib=await import(libURL);
@@ -11,6 +12,14 @@ test("browser module imports reference existing local files",async()=>{
   const source=await file(name);
   for(const match of source.matchAll(/from\s+["']\/([^"'?]+)(?:\?[^"']*)?["']/g)){
    await assert.doesNotReject(()=>file(match[1]),`${name} imports missing /${match[1]}`);
+  }
+ }
+});
+test("browser markup references existing local assets",async()=>{
+ for(const name of ["public.js","product.js","ui.js"]){
+  const source=await file(name);
+  for(const match of source.matchAll(/\bsrc=["']\/([^"'?]+)(?:\?[^"']*)?["']/g)){
+   await assert.doesNotReject(()=>asset(match[1]),`${name} references missing /${match[1]}`);
   }
  }
 });
