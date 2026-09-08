@@ -4,7 +4,7 @@ A payout agent for Binance Agent OS. It turns a plain-English payout book into [
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen) ![Tests](https://img.shields.io/badge/tests-59%20python%20%2B%2012%20node-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue) ![Status](https://img.shields.io/badge/status-demo%20only-orange)
 
-> **Disclaimer.** Allot is a hackathon demo. It prepares payment requirements and never signs, broadcasts, settles, or custodies anything. It holds no keys, requires no Binance API key, and moves no funds. Prices come from Binance Spot Testnet with the public mainnet ticker as fallback. Nothing here is an offer to transmit money.
+> **Disclaimer.** Allot is a hackathon demo. It prepares payment requirements and never signs, broadcasts, settles, or custodies anything. It holds no keys, requires no Binance API key, and moves no funds. Prices come from Binance Spot Testnet, with Binance's public market-data mirror and the mainnet ticker as fallbacks. Nothing here is an offer to transmit money.
 
 ## Contents
 
@@ -68,7 +68,7 @@ python -m allot mcp                                                           # 
 ## How it works
 
 1. **Parse.** The sentence becomes a validated instruction. Recipients, pair (`USDCUSDT`), and cadence (`monthly`) come from the book. Amounts and splits are read from the sentence; off-book amounts snap back to the booked figure with a warning. Trading verbs — buy, sell, swap, long, short, leverage — are rejected outright.
-2. **Price.** Last price from Binance Spot Testnet, falling back to the public mainnet ticker.
+2. **Price.** Last price from Binance Spot Testnet, falling back to Binance's public market-data mirror (`data-api.binance.vision`) and then the mainnet ticker. The mirror matters in deployment: `api.binance.com` answers HTTP 451 from many hosting regions.
 3. **Check against Binance's rules.** Five public Spot endpoints are read in parallel and turned into seven pass/warn/fail checks on the prepared allocation. See [The Binance rail](#the-binance-rail).
 4. **Build requirements.** Each spend leg becomes an x402 v2 `PaymentRequired` object for BSC USDT (`exact` scheme), plus its Base64 `PAYMENT-REQUIRED` header. Allot never signs.
 5. **Discover.** A live call to the [B402 Bazaar](https://www.binance.com/bapi/ramp/v1/public/ramp/b402/bazaar/resources) public resource list. Failure is a warning; it does not block preparation.
@@ -77,7 +77,7 @@ python -m allot mcp                                                           # 
 
 ## The Binance rail
 
-Reading a price is not an integration. Before a receipt is issued, the prepared book is checked against Binance's own live trading rules. Five public Spot endpoints are read concurrently; `exchangeInfo` is cached for ten minutes.
+Reading a price is not an integration. Before a receipt is issued, the prepared book is checked against Binance's own live trading rules. Five public Spot endpoints are read concurrently; `exchangeInfo` is cached for ten minutes. Each read tries Spot Testnet, then `data-api.binance.vision`, then `api.binance.com`, and the receipt records which source answered.
 
 | Binance endpoint | Used for |
 | --- | --- |
@@ -253,7 +253,7 @@ data/book.json    the fixed payout book
 
 **Working against live infrastructure**
 
-- Binance `USDCUSDT` last price — Spot Testnet, then the public mainnet ticker.
+- Binance `USDCUSDT` last price — Spot Testnet, then the public market-data mirror, then the mainnet ticker.
 - Binance exchange filters — pair status, lot step, min and max notional — applied per leg.
 - Binance rolling average price, 24h range, live order-book depth, and server-clock drift.
 - B402 Bazaar public resource discovery.

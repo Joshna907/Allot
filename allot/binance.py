@@ -19,8 +19,15 @@ from typing import Any, Callable
 from allot.price import USER_AGENT
 
 TESTNET = "https://testnet.binance.vision/api/v3"
+# Binance's public market-data mirror. api.binance.com answers 451 from many
+# hosting regions; the mirror serves the same Spot data and stays reachable.
+DATA_MIRROR = "https://data-api.binance.vision/api/v3"
 MAINNET = "https://api.binance.com/api/v3"
-SOURCES = (("binance-spot-testnet", TESTNET), ("binance-spot-mainnet", MAINNET))
+SOURCES = (
+    ("binance-spot-testnet", TESTNET),
+    ("binance-data-mirror", DATA_MIRROR),
+    ("binance-spot-mainnet", MAINNET),
+)
 
 # exchangeInfo changes rarely; a receipt should not re-fetch it on every click.
 _CACHE_TTL = 600.0

@@ -8,6 +8,9 @@ from decimal import Decimal
 from typing import Any
 
 TESTNET_TICKER = "https://testnet.binance.vision/api/v3/ticker/price"
+# Binance's public market-data mirror. api.binance.com answers 451 from many
+# hosting regions; the mirror serves the same Spot data and stays reachable.
+DATA_TICKER = "https://data-api.binance.vision/api/v3/ticker/price"
 MAINNET_TICKER = "https://api.binance.com/api/v3/ticker/price"
 USER_AGENT = "AllotPayoutBook/0.1 (Binance Agent OS hackathon; testnet)"
 
@@ -21,7 +24,11 @@ def _get_json(url: str, timeout: float = 8.0) -> dict[str, Any]:
 def fetch_pair_price(symbol: str = "USDCUSDT") -> dict[str, Any]:
     """Live Binance price. Testnet first, mainnet public ticker as fallback."""
     errors: list[str] = []
-    for source, base in (("binance-spot-testnet", TESTNET_TICKER), ("binance-spot-mainnet", MAINNET_TICKER)):
+    for source, base in (
+        ("binance-spot-testnet", TESTNET_TICKER),
+        ("binance-data-mirror", DATA_TICKER),
+        ("binance-spot-mainnet", MAINNET_TICKER),
+    ):
         url = f"{base}?symbol={symbol}"
         try:
             payload = _get_json(url)
