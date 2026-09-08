@@ -1,17 +1,22 @@
 import {api,postJson,DEFAULT_BOOK_TEXT,esc,usd,formatUtc} from "/lib.js";
+import {mountHeroFlow} from "/hero-canvas.js?v=4";
 import {heading,link,external,GITHUB,skeleton,errorState,empty,totals,allocations,receiptRow,notice,verification} from "/ui.js";
 export const landingPage={
  title:"A clear plan for every payout",
  description:"Describe a monthly payout, review three recipient allocations, and prepare a receipt you can check. Demo only, no funds move.",
- render:()=>`<div class="landing-page"><section class="hero shell"><div class="hero-copy"><h1>One budget.<br>Everyone accounted for.</h1><p>Describe your payout. Review each person's share. Prepare a receipt you can check.</p><div class="hero-actions">${link("/app","Open payout book",true)}<a href="#receipt-proof">See receipt proof</a></div></div><aside class="hero-book" id="hero-book" aria-label="Live demo payout book">${skeleton("Loading the demo allocation")}</aside></section><div class="shell">${notice("Demo only. No funds move. Monthly allocations are prepared manually, not scheduled automatically.")}<section class="content-section"><h2>From a sentence to a clear record.</h2><p>For someone coordinating regular support or contractor payouts, the important questions are simple: who, how much, and what happened?</p><ol class="journey"><li><h3>Describe</h3><p>Write your payout in everyday language.</p></li><li><h3>Review</h3><p>Check the amounts and any corrections.</p></li><li><h3>Prepare</h3><p>Create unsigned payment requirements.</p></li><li><h3>Verify</h3><p>Keep a receipt and check its integrity.</p></li></ol></section><section class="content-section"><div class="section-heading"><h2>Three people. One monthly book.</h2><p>This demo uses a fixed $400 budget and three recipients. The default allocation is 80% to recipients and 20% excluded.</p></div><div id="landing-allocation">${skeleton("Loading recipients")}</div><p class="helper">The held amount is only recorded as excluded. Allot does not receive or hold money.</p></section><section class="content-section" id="receipt-proof"><h2>A record you can come back to.</h2><p>The newest preparation from this shared demo appears below. Download receipts you want to keep.</p><div id="latest-receipt">${skeleton("Loading receipt proof")}</div></section><section class="content-section boundary-grid"><div><h2>What happens here</h2><p>Your instruction becomes a checked allocation. Allot retrieves a Binance quote, prepares x402 requirements, and saves a hashed receipt.</p></div><div><h2>What does not happen</h2><p>No wallet credentials, signatures, broadcasts, or settlement. This is a payout preparation demo, not a live transfer service.</p></div></section><section class="content-section"><h2>Before you try it</h2><div class="faq-list">
+ render:()=>`<div class="landing-page"><section class="hero shell"><canvas class="hero-flow" id="hero-flow"></canvas><div class="hero-veil"></div><div class="hero-copy"><h1>One budget.<br>Everyone accounted for.</h1><p>Describe your payout. Review each person's share. Prepare a receipt you can check.</p><div class="hero-actions">${link("/app","Open payout book",true)}<a href="#receipt-proof">See receipt proof</a></div></div><aside class="hero-book" id="hero-book" aria-label="Live demo payout book">${skeleton("Loading the demo allocation")}</aside></section><div class="shell">${notice("Demo only. No funds move. Monthly allocations are prepared manually, not scheduled automatically.")}<section class="content-section"><h2>From a sentence to a clear record.</h2><p>For someone coordinating regular support or contractor payouts, the important questions are simple: who, how much, and what happened?</p><ol class="journey"><li><h3>Describe</h3><p>Write your payout in everyday language.</p></li><li><h3>Review</h3><p>Check the amounts and any corrections.</p></li><li><h3>Prepare</h3><p>Create unsigned payment requirements.</p></li><li><h3>Verify</h3><p>Keep a receipt and check its integrity.</p></li></ol></section><section class="content-section"><div class="section-heading"><h2>Three people. One monthly book.</h2><p>This demo uses a fixed $400 budget and three recipients. The default allocation is 80% to recipients and 20% excluded.</p></div><div id="landing-allocation">${skeleton("Loading recipients")}</div><p class="helper">The held amount is only recorded as excluded. Allot does not receive or hold money.</p></section><section class="content-section" id="receipt-proof"><div class="section-heading"><h2>A record you can come back to.</h2><p>The newest preparation from this shared demo appears below. Download receipts you want to keep.</p></div><div class="ledger-terminal-wrapper"><div id="latest-receipt">${skeleton("Loading receipt proof")}</div></div></section><section class="content-section duality-grid"><div class="duality-card card-action"><h2>What happens here</h2><p>Your instruction becomes a checked allocation. Allot retrieves a Binance quote, prepares x402 requirements, and saves a hashed receipt.</p><div class="edge-stream"></div></div><div class="duality-card card-secure"><h2>What does not happen</h2><p>No wallet credentials, signatures, broadcasts, or settlement. This is a payout preparation demo, not a live transfer service.</p><div class="laser-scanner"></div></div></section><section class="faq-section"><div class="faq-hero"><h1>YOU HAVE QUESTIONS.<br>WE HAVE <span class="badge-answers"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg></span> ANSWERS.</h1><div class="scroll-explore">Scroll to explore &darr;</div></div><div class="faq-grid"><div class="faq-left"><p>Whatever you need to know about verifiable allocations, we got you covered.</p></div><div class="faq-list">
  <details><summary>What is a payout book?</summary><p>A record of who an allocation is for, how much each person receives, and how often it is intended. Here, the recipients, budget, and monthly frequency are fixed.</p></details>
  <details><summary>Does the demo send money every month?</summary><p>No. Monthly is the intended allocation frequency. Each demonstration must be started manually, and no transfer occurs.</p></details>
  <details><summary>What does prepared mean?</summary><p>The information needed to request a payment exists. No wallet approved it and no recipient was paid.</p></details>
  <details><summary>What happens to the held amount?</summary><p>It is excluded from the payment requirements. There is no deposit, custody, lock, or automatic release.</p></details>
  <details><summary>What does verification prove?</summary><p>It checks whether the receipt content matches its printed hash. It does not establish sender identity, authenticity, or settlement.</p></details>
  <details><summary>Why can a receipt disappear?</summary><p>The demo stores receipts in a JSON file. Hosted temporary storage can reset after redeployment. Downloading a receipt preserves a readable copy.</p></details>
- <details><summary>Is Allot a trading bot?</summary><p>No. The quote is used to prepare a payout allocation, not to predict markets or place trades.</p></details></div></section><section class="final-cta"><div><h2>Start with one sentence.</h2><p>See what Allot understands before anything is prepared.</p></div>${link("/app","Open payout book",true)}</section></div></div>`,
+ <details><summary>Is Allot a trading bot?</summary><p>No. The quote is used to prepare a payout allocation, not to predict markets or place trades.</p></details></div></div></section><section class="final-cta"><canvas class="hero-flow" id="cta-flow"></canvas><div class="hero-veil"></div><div class="cta-content"><div><h2>Start with one sentence.</h2><p>See what Allot understands before anything is prepared.</p></div>${link("/app","Open payout book",true)}</div></section></div></div>`,
  async mount({root,alive}){
+   const stopHeroFlow = mountHeroFlow(root.querySelector("#hero-flow"));
+   const stopCtaFlow = mountHeroFlow(root.querySelector("#cta-flow"));
+   const heroCleanup = setInterval(()=>{if(!alive()){stopHeroFlow();stopCtaFlow();clearInterval(heroCleanup);}},500);
+
   async function book(){
    const targets=[root.querySelector("#hero-book"),root.querySelector("#landing-allocation")];
    targets.forEach(target=>target.innerHTML=skeleton("Loading allocation"));
@@ -24,10 +29,53 @@ export const landingPage={
    const target=root.querySelector("#latest-receipt");
    try{const rows=await api("/api/receipts");if(!alive())return;
     if(!rows.length){target.innerHTML=empty("No receipts on this instance yet","Prepare the first payout to create a receipt.");return;}
-    const r=rows[0];target.innerHTML=receiptRow(r)+'<p id="latest-check" role="status">Checking receipt integrity…</p>';
+    const r=rows[0];
+    
+    target.innerHTML = `
+      <div class="ledger-terminal">
+        <div class="ledger-header">
+          <div class="ledger-badge">VERIFIED BLOCK</div>
+          <div class="ledger-time">${formatUtc(r.issued_at)}</div>
+        </div>
+        <div class="ledger-body">
+          <div class="ledger-row">
+            <span class="ledger-label">Transaction Hash</span>
+            <code class="ledger-hash scramble-text" data-hash="${esc(r.receipt_id)}">........................................</code>
+          </div>
+          <div class="ledger-grid">
+            <div><span class="ledger-label">Total Budget</span><strong class="ledger-value">${usd(r.totals?.gross_usd)}</strong></div>
+            <div><span class="ledger-label">Recipients</span><strong class="ledger-value">${(r.legs||[]).filter(l=>l.role==="spend").length}</strong></div>
+            <div><span class="ledger-label">Prepared</span><strong class="ledger-value" style="color:#7bd3a7">${usd(r.totals?.spend_usd)}</strong></div>
+            <div><span class="ledger-label">Excluded</span><strong class="ledger-value">${usd(r.totals?.hold_usd)}</strong></div>
+          </div>
+        </div>
+        <div class="ledger-footer">
+          <p id="latest-check" role="status" class="ledger-status"><span class="radar-dot"></span> Checking receipt integrity…</p>
+          <a class="button button-small button-secondary" href="/receipts/${encodeURIComponent(r.receipt_id)}" data-link>View Record</a>
+        </div>
+      </div>
+    `;
+
+    const hashEl = target.querySelector('.scramble-text');
+    const finalHash = hashEl.dataset.hash;
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let iteration = 0;
+    const scrambleInterval = setInterval(() => {
+      if(!alive()) { clearInterval(scrambleInterval); return; }
+      hashEl.innerText = finalHash.split('').map((letter, index) => {
+        if(index < iteration) return finalHash[index];
+        return chars[Math.floor(Math.random() * chars.length)];
+      }).join('');
+      if(iteration >= finalHash.length) clearInterval(scrambleInterval);
+      iteration += 1;
+    }, 20);
+
     const status=root.querySelector("#latest-check");
-    try{const result=await api("/api/verify/"+encodeURIComponent(r.receipt_id));if(!alive())return;status.textContent=result.ok?"Receipt content matches its hash. No funds moved.":"Integrity warning: receipt content does not match its hash.";status.className=result.ok?"match-text":"field-error";if(!result.ok)status.setAttribute("role","alert");}
-    catch{if(alive())status.innerHTML='Verification unavailable. <a href="/verify?value='+encodeURIComponent(r.receipt_id)+'" data-link>Try verification again</a>';}
+    try{const result=await api("/api/verify/"+encodeURIComponent(r.receipt_id));if(!alive())return;
+      status.innerHTML=result.ok?`<span class="radar-dot active"></span> Receipt content matches its hash. No funds moved.`:`<span class="radar-dot error"></span> Integrity warning: receipt content does not match its hash.`;
+      status.className=result.ok?"ledger-status match-text":"ledger-status field-error";
+      if(!result.ok)status.setAttribute("role","alert");
+    } catch{if(alive())status.innerHTML='Verification unavailable. <a href="/verify?value='+encodeURIComponent(r.receipt_id)+'" data-link>Try verification again</a>';}
    }catch(error){if(alive()){target.innerHTML=errorState("Receipt proof unavailable",error.message,"retry-proof");root.querySelector("#retry-proof").onclick=latest;}}
   }
   await Promise.all([book(),latest()]);
@@ -51,7 +99,7 @@ export const writeupPage={
  <section><h2>Working product surfaces</h2><p>The book overview provides context, the guided workspace handles describe and review, activity stores preparation history, and receipt pages combine outcomes with expandable technical evidence.</p><p>Draft text stays in session storage when available. Receipts are server-side JSON, shared by this demo instance. There are no user accounts or database.</p></section>
  <section><h2>Parser and agent interface</h2><p>A deterministic parser recognizes supported money, monthly cadence, and labelled spend/held percentages. It is not a general-purpose language model. Invalid or ambiguous splits are rejected. Server-side decimal arithmetic produces the review allocation and execution amounts.</p><p>The website uses HTTP APIs. MCP tools call the same parser, execution, lookup, and verification functions.</p></section>
  <section><h2>Rail integration</h2><p>The rail fetches a Binance USDCUSDT quote, using spot testnet with a public mainnet ticker fallback. It builds x402 v2 exact-scheme requirements for BSC USDT and records optional Bazaar discovery evidence.</p><p>GET payout endpoints return HTTP 402 and PAYMENT-REQUIRED. Requests with PAYMENT-SIGNATURE are rejected. There is no signing, broadcasting, settlement, or automatic monthly scheduler.</p></section>
- <section><h2>API reference</h2><dl class="api-reference"><dt>GET /api/book</dt><dd>Fixed payout configuration</dd><dt>POST /api/parse</dt><dd>Instruction, validation, warnings, and decimal-calculated allocation</dd><dt>POST /api/execute</dt><dd>Prepare unsigned requirements and store a receipt</dd><dt>GET /api/receipts</dt><dd>Shared demo history</dd><dt>GET /api/receipts/{id-or-hash}</dt><dd>Canonical stored receipt</dd><dt>GET /api/verify/{id-or-hash}</dt><dd>Claimed and recomputed hashes for a stored receipt</dd><dt>POST /api/verify</dt><dd>Recomputes the hash of a receipt you post, without reading storage</dd><dt>GET /api/health</dt><dd>Current quote and optional discovery availability</dd><dt>GET /healthz</dt><dd>Lightweight service health</dd><dt>GET /payout/{receipt_id}/{recipient_id}</dt><dd>HTTP 402 payment requirement</dd></dl></section>
+ <section><h2>API reference</h2><dl class="api-reference"><dt>GET /api/book</dt><dd>Fixed payout configuration</dd><dt>POST /api/parse</dt><dd>Instruction, validation, warnings, and decimal-calculated allocation</dd><dt>POST /api/execute</dt><dd>Prepare unsigned requirements and store a receipt</dd><dt>GET /api/receipts</dt><dd>Shared demo history</dd><dt>GET /api/receipts/{id-or-hash}</dt><dd>Canonical stored receipt</dd><dt>GET /api/verify/{id-or-hash}</dt><dd>Claimed and recomputed hashes</dd><dt>GET /api/health</dt><dd>Current quote and optional discovery availability</dd><dt>GET /healthz</dt><dd>Lightweight service health</dd><dt>GET /payout/{receipt_id}/{recipient_id}</dt><dd>HTTP 402 payment requirement</dd></dl></section>
  <section><h2>Teammate integration contract</h2><p>The interface consumes receipt_id, issued_at, status, instruction, quote, legs, totals, evidence, bazaar, receipt_hash, and what_remains. A failed quote returns ok: false and retryable: true. Discovery failure is non-blocking.</p><p>Rail outputs are shown as returned. The website does not invent transaction hashes, fees, wallet approvals, or settlement status.</p></section>
  <section><h2>Verification boundaries</h2><p>SHA-256 is computed from canonical receipt JSON excluding receipt_hash. Matching content and hash demonstrates consistency only. Anyone able to change both can recompute a hash; this is not signed authentication.</p></section>
  <section><h2>Run and test locally</h2><pre>python -m allot serve</pre><p>No npm installation or frontend build is required.</p><pre>python -m unittest discover -s tests -v</pre><p>Regression tests cover parsing, exact allocations, receipt hashing, public routes, and HTTP payment boundaries. See the repository for executable tests and the latest results.</p></section>
