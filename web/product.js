@@ -153,7 +153,10 @@ export const receiptPage={
    const current=++checkRevision,output=root.querySelector("#receipt-verification"),button=root.querySelector("#recheck");
    button.disabled=true;output.innerHTML=skeleton("Checking receipt integrity");
    try{const result=await api("/api/verify/"+encodeURIComponent(receipt.receipt_id));if(alive()&&current===checkRevision)output.innerHTML=verification(result);}
-   catch{if(alive()&&current===checkRevision)output.innerHTML=verification(null);}
+   catch{
+    try{const result=await postJson("/api/verify",receipt);if(alive()&&current===checkRevision)output.innerHTML=verification(result)+'<p class="helper">The stored copy is unavailable, so the hash was recomputed from the receipt on this page.</p>';}
+    catch{if(alive()&&current===checkRevision)output.innerHTML=verification(null);}
+   }
    finally{button.disabled=false;}
   }
   root.querySelector("#recheck").onclick=check;await check();
@@ -161,7 +164,7 @@ export const receiptPage={
 };
 export const verifyPage={
  title:"Verify a receipt",
- render:()=>shell(heading("Verify a receipt","Check whether stored receipt content matches its printed hash.")+`<form id="verify-form" class="verify-form" novalidate><div class="field"><label for="verify-value">Receipt ID or SHA-256 hash</label><p id="verify-help" class="helper">Use the complete value from a receipt. This checks integrity, not payment settlement.</p><input id="verify-value" name="value" autocomplete="off" spellcheck="false" aria-describedby="verify-help verify-error"><p class="field-error" id="verify-error" role="alert"></p></div><button class="button button-primary">Check receipt</button></form><div id="verification-output" aria-live="polite"></div>`+notice("Lookup is limited to this demo instance. If storage resets, a downloaded JSON receipt remains readable, but its ID may no longer be found here.")+link("/receipts","Browse demo activity")),
+ render:()=>shell(heading("Verify a receipt","Check whether stored receipt content matches its printed hash.")+`<form id="verify-form" class="verify-form" novalidate><div class="field"><label for="verify-value">Receipt ID or SHA-256 hash</label><p id="verify-help" class="helper">Use the complete value from a receipt. This checks integrity, not payment settlement.</p><input id="verify-value" name="value" autocomplete="off" spellcheck="false" aria-describedby="verify-help verify-error"><p class="field-error" id="verify-error" role="alert"></p></div><button class="button button-primary">Check receipt</button></form><details class="verify-paste"><summary>Verify a receipt this instance no longer stores</summary><div class="field"><label for="verify-json">Receipt JSON</label><p id="paste-help" class="helper">Paste a downloaded receipt. The hash is recomputed from what you paste; storage is not read.</p><textarea id="verify-json" spellcheck="false" aria-describedby="paste-help paste-error"></textarea><p class="field-error" id="paste-error" role="alert"></p></div><button class="button button-secondary" id="verify-paste-run" type="button">Check pasted receipt</button></details><div id="verification-output" aria-live="polite"></div>`+notice("Lookup is limited to this demo instance. If storage resets, a downloaded JSON receipt remains readable, but its ID may no longer be found here.")+link("/receipts","Browse demo activity")),
  async mount({root,alive}){
   const input=root.querySelector("#verify-value"),form=root.querySelector("#verify-form"),output=root.querySelector("#verification-output"),error=root.querySelector("#verify-error");
   let sequence=0;
@@ -177,9 +180,20 @@ export const verifyPage={
     output.innerHTML=verification(result)+`<p>${link("/receipts/"+encodeURIComponent(result.receipt_id),"View full receipt")}</p><div id="verify-context"></div>`;
     const metadata=root.querySelector("#verify-context");
     try{const r=await api("/api/receipts/"+encodeURIComponent(value));if(alive()&&current===sequence)metadata.innerHTML=`<p>${esc(r.receipt_id)}<br>${usd(r.totals?.gross_usd)} budget · ${formatUtc(r.issued_at)}</p>`;}catch{if(alive()&&current===sequence)metadata.textContent="Supporting receipt details are unavailable. The verification result above is still valid.";}
-   }catch(cause){if(alive()&&current===sequence){output.innerHTML=cause.status===404?empty("Receipt not found","Check the ID, or browse the current instance. Hosted receipts may have expired.","/receipts","Browse activity"):errorState("Could not verify",cause.message,"retry-verify");root.querySelector("#retry-verify")?.addEventListener("click",check);}}
+   }catch(cause){if(alive()&&current===sequence){output.innerHTML=cause.status===404?empty("Receipt not found","Check the ID, or browse the current instance. Hosted receipts may have expired — if you downloaded the JSON, paste it above instead.","/receipts","Browse activity"):errorState("Could not verify",cause.message,"retry-verify");root.querySelector("#retry-verify")?.addEventListener("click",check);}}
    finally{if(current===sequence)form.querySelector("button").disabled=false;}
   }
+  const pasteField=root.querySelector("#verify-json"),pasteError=root.querySelector("#paste-error"),pasteButton=root.querySelector("#verify-paste-run");
+  pasteButton.onclick=async()=>{
+   let pasted;
+   try{pasted=JSON.parse(pasteField.value);}
+   catch{pasteError.textContent="That is not valid JSON. Paste the whole downloaded receipt file.";pasteField.setAttribute("aria-invalid","true");pasteField.focus();return;}
+   pasteError.textContent="";pasteField.removeAttribute("aria-invalid");
+   const current=++sequence;pasteButton.disabled=true;output.innerHTML=skeleton("Checking pasted receipt");
+   try{const result=await postJson("/api/verify",pasted);if(alive()&&current===sequence)output.innerHTML=verification(result)+'<p class="helper">Recomputed from the JSON you pasted. Storage was not used.</p>';}
+   catch(cause){if(alive()&&current===sequence){pasteError.textContent=cause.message;output.innerHTML="";}}
+   finally{if(current===sequence)pasteButton.disabled=false;}
+  };
   form.onsubmit=event=>{event.preventDefault();check();};
   input.oninput=()=>{sequence++;form.querySelector("button").disabled=false;output.innerHTML="";};
   input.value=new URLSearchParams(location.search).get("value")||"";
