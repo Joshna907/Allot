@@ -2,12 +2,13 @@ services:
   - type: web
     name: allot
     runtime: python
-    pythonVersion: "3.13.5"
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python -m allot serve
     healthCheckPath: /healthz
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
       - key: HOST
         value: 0.0.0.0
       - key: ALLOT_DATA_DIR
