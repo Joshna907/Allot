@@ -6,6 +6,14 @@ const moduleURL = source => "data:text/javascript;base64,"+Buffer.from(source).t
 const libURL=moduleURL(await file("lib.js"));
 const lib=await import(libURL);
 const ui=await import(moduleURL((await file("ui.js")).replace('"/lib.js"',JSON.stringify(libURL))));
+test("browser module imports reference existing local files",async()=>{
+ for(const name of ["app.js","public.js","product.js","ui.js","lib.js"]){
+  const source=await file(name);
+  for(const match of source.matchAll(/from\s+["']\/([^"'?]+)(?:\?[^"']*)?["']/g)){
+   await assert.doesNotReject(()=>file(match[1]),`${name} imports missing /${match[1]}`);
+  }
+ }
+});
 test("blocked session storage still has a usable draft",()=>assert.match(lib.appState.instructionText,/400/));
 test("monetary display remains cent-exact",()=>assert.equal(lib.usd("128.03"),"$128.03"));
 test("public navigation keeps build notes out of the navbar",()=>{
