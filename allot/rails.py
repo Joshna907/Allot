@@ -1,6 +1,9 @@
 """Composed Binance rail views shared by the HTTP API and the MCP tools."""
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from typing import Any
 
@@ -14,14 +17,34 @@ from allot.x402 import probe_bazaar
 
 DEFAULT_SYMBOL = "USDCUSDT"
 
+# /api/rails is a status view, not the receipt path. Upstream latency swings
+# between 2s and 14s, so a short cache keeps the page usable without ever
+# standing between a receipt and a fresh read.
+_STATUS_TTL = 15.0
+_STATUS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_STATUS_LOCK = threading.Lock()
+
+
+def clear_status_cache() -> None:
+    with _STATUS_LOCK:
+        _STATUS_CACHE.clear()
+
 
 def rail_status(symbol: str = DEFAULT_SYMBOL) -> dict[str, Any]:
     """Everything Allot reads from Binance before it prepares anything."""
-    snapshot = market_snapshot(symbol)
-    bazaar = probe_bazaar()
+    now = time.monotonic()
+    with _STATUS_LOCK:
+        hit = _STATUS_CACHE.get(symbol)
+    if hit and now - hit[0] < _STATUS_TTL:
+        return {**hit[1], "cache_age_seconds": round(now - hit[0], 1)}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        snapshot_job = pool.submit(market_snapshot, symbol)
+        bazaar_job = pool.submit(probe_bazaar)
+        snapshot = snapshot_job.result()
+        bazaar = bazaar_job.result()
     rules = snapshot.get("rules") or {}
     book = snapshot.get("book") or {}
-    return {
+    status = {
         "ok": snapshot.get("reachable", 0) > 0,
         "symbol": symbol,
         "reads": f"{snapshot.get('reachable')}/{snapshot.get('reads')} Binance endpoints reachable",
@@ -45,6 +68,9 @@ def rail_status(symbol: str = DEFAULT_SYMBOL) -> dict[str, Any]:
         },
         "signing": "disabled — Allot reads Binance, it does not trade or settle",
     }
+    with _STATUS_LOCK:
+        _STATUS_CACHE[symbol] = (time.monotonic(), status)
+    return {**status, "cache_age_seconds": 0.0}
 
 
 def symbol_rules(symbol: str = DEFAULT_SYMBOL) -> dict[str, Any]:
