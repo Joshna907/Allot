@@ -45,7 +45,7 @@ def _split(text: str) -> tuple[int, int] | None:
         raise ValueError("Spend and held percentages must add up to 100%.")
     if re.search(r"-\s*\d+\s*%|\d+\.\d+\s*%", text):
         raise ValueError("Use whole, non-negative percentages for this demo.")
-    role_pattern = r"(spend|spending|held|hold|save|saved|reserve|reserved)\b"
+    role_pattern = r"(spend|spent|spending|held|hold|save|saved|reserve|reserved)\b"
     roles = []
     for index, match in enumerate(matches):
         after = text[match.end():matches[index + 1].start() if index + 1 < len(matches) else len(text)]
@@ -53,7 +53,7 @@ def _split(text: str) -> tuple[int, int] | None:
         suffix = re.match(r"\s*(?:(?:to|for|as)\s+)?" + role_pattern, after, re.I)
         prefix = re.search(role_pattern + r"\s*[:=]?\s*$", before, re.I)
         found = prefix if index == 0 and prefix else suffix or prefix
-        roles.append("spend" if found and found.group(1).lower() in ("spend", "spending") else "hold" if found else None)
+        roles.append("spend" if found and found.group(1).lower() in ("spend", "spent", "spending") else "hold" if found else None)
     if set(roles) != {"spend", "hold"}:
         raise ValueError("Label both percentages clearly, for example: 80% to spend, 20% held.")
     return values[roles.index("spend")] * 100, values[roles.index("hold")] * 100
