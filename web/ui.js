@@ -4,11 +4,11 @@ export const link=(href,label,primary=false)=>`<a class="button ${primary?"butto
 export const external=(href,label)=>{
  try { if(!["http:","https:"].includes(new URL(href).protocol))return `<span>${esc(label)} (invalid destination)</span>`; }
  catch { return `<span>${esc(label)} (destination unavailable)</span>`; }
- return `<a href="${attr(href)}" target="_blank" rel="noreferrer">${esc(label)} <span aria-hidden="true">↗</span><span class="sr-only"> (external destination)</span></a>`;
+ return `<a href="${attr(href)}" target="_blank" rel="noreferrer">${esc(label)}<span class="sr-only"> (external destination)</span></a>`;
 };
 export const heading=(title,intro,action="")=>`<div class="page-heading"><div><h1 tabindex="-1">${esc(title)}</h1><p>${esc(intro)}</p></div>${action}</div>`;
 export function header(path,product=false){
- const items=product?[["/app","Payout book"],["/receipts","Activity"],["/how-it-works","Help"]]:[["/how-it-works","How it works"],["/verify","Verify receipt"]];
+ const items=product?[["/app","Payout book"],["/receipts","Activity"],["/how-it-works","Help"]]:[["/#workflow","Workflow"],["/#receipt-proof","Receipt proof"],["/#faq","FAQ"]];
  return `<header class="site-header"><div class="shell nav-shell"><a class="wordmark" href="/" data-link aria-label="Allot home">Allot</a><nav class="main-nav" aria-label="Main navigation">${items.map(([href,label])=>`<a href="${href}" data-link ${path===href||(href==="/receipts"&&path.startsWith("/receipts/"))||(href==="/app"&&path.startsWith("/app/"))?'aria-current="page" class="active"':""}>${label}</a>`).join("")}</nav><div class="nav-actions">${product?'<span class="demo-badge">Demo only. No funds move.</span>':link("/app","Open payout book",true)}</div></div></header>`;
 }
 export function footer(product=false){

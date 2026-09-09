@@ -67,6 +67,12 @@ document.addEventListener("click",async event=>{
   if(!link||event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
   const url=new URL(link.href,location.origin);
   if(url.origin!==location.origin)return;
+  if(url.pathname===location.pathname&&url.search===location.search&&url.hash){
+    event.preventDefault();
+    history.pushState({},"",url.pathname+url.search+url.hash);
+    document.getElementById(url.hash.slice(1))?.scrollIntoView();
+    return;
+  }
   event.preventDefault();await navigate(url.href);
 });
 window.addEventListener("popstate",()=>navigate(location.href,{replace:true}));
