@@ -214,7 +214,7 @@ class HttpContractTests(unittest.TestCase):
             self.assertTrue(exc.headers.get_content_type().startswith("text/html"))
 
     def test_frontend_modules_have_javascript_mime(self) -> None:
-        for asset in ("app.js", "lib.js", "ui.js", "product.js", "public.js"):
+        for asset in ("app.js", "lib.js", "ui.js", "product.js", "public.js", "hero-canvas.js"):
             with urlopen(self._url("/" + asset), timeout=5) as response:
                 self.assertEqual(response.status, 200)
                 self.assertEqual(response.headers.get_content_type(), "text/javascript")

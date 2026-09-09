@@ -1,5 +1,10 @@
 import {api,postJson,DEFAULT_BOOK_TEXT,esc,usd,formatUtc} from "/lib.js";
+import {mountHeroFlow} from "/hero-canvas.js?v=5";
 import {heading,link,external,GITHUB,skeleton,errorState,empty,totals,allocations,receiptRow,notice,verification} from "/ui.js";
+
+const referenceWorkflow=()=>`<section class="interactive-layout" aria-labelledby="allocation-walkthrough-title"><div class="interactive-left"><div class="interactive-left-header"><h2 id="allocation-walkthrough-title">A verified ledger<br>for your allocations</h2><p>Click through the process below to see how Allot handles funds from start to finish securely.</p></div><div class="interactive-accordion" role="tablist" aria-label="Allocation workflow"><button class="interactive-list-item" type="button" role="tab" aria-selected="false" data-step="0"><h3>Describe</h3><p>Write your payout in everyday language.</p></button><button class="interactive-list-item active" type="button" role="tab" aria-selected="true" data-step="1"><h3>Review</h3><p>Check the amounts and any corrections.</p></button><button class="interactive-list-item" type="button" role="tab" aria-selected="false" data-step="2"><h3>Prepare</h3><p>Create unsigned payment requirements.</p></button><button class="interactive-list-item" type="button" role="tab" aria-selected="false" data-step="3"><h3>Verify</h3><p>Keep a receipt and check its integrity.</p></button></div></div><div class="interactive-right"><div class="interactive-visual" id="allocation-visual" role="tabpanel" aria-live="polite">${skeleton("Loading allocation")}</div></div></section>`;
+
+const receiptPreview=()=>`<div class="ledger-terminal ledger-preview"><div class="ledger-header"><div class="ledger-badge">DEMO PREVIEW</div><div class="ledger-time">Create a preparation to save a live receipt</div></div><div class="ledger-body"><div class="ledger-row"><span class="ledger-label">Receipt reference</span><code class="ledger-hash">ALLOT-DEMO-PREVIEW</code></div><div class="ledger-grid"><div><span class="ledger-label">Total budget</span><strong class="ledger-value">$400.00</strong></div><div><span class="ledger-label">Recipients</span><strong class="ledger-value">3</strong></div><div><span class="ledger-label">Prepared</span><strong class="ledger-value ledger-value-ready">$320.00</strong></div><div><span class="ledger-label">Excluded</span><strong class="ledger-value">$80.00</strong></div></div></div><div class="ledger-footer"><p class="ledger-status">Preview only. No receipt has been created and no funds moved.</p><a class="button button-small button-secondary" href="/app" data-link>Open payout book</a></div></div>`;
 export const landingPage={
  title:"A clear plan for every payout",
  description:"Describe a monthly payout, review three recipient allocations, and prepare a receipt you can check. Demo only, no funds move.",
@@ -12,46 +17,40 @@ export const landingPage={
  <details><summary>Why can a receipt disappear?</summary><p>The demo stores receipts in a JSON file. Hosted temporary storage can reset after redeployment. Downloading a receipt preserves a readable copy.</p></details>
  <details><summary>Is Allot a trading bot?</summary><p>No. The quote is used to prepare a payout allocation, not to predict markets or place trades.</p></details></div></div></section><section class="final-cta"><canvas class="hero-flow" id="cta-flow"></canvas><div class="hero-veil"></div><div class="cta-content"><div><h2>Start with one sentence.</h2><p>See what Allot understands before anything is prepared.</p></div>${link("/app","Open payout book",true)}</div></section></div></div>`,
  async mount({root,alive}){
+   const stopHeroFlow=mountHeroFlow(root.querySelector("#hero-flow"));
+   const stopCtaFlow=mountHeroFlow(root.querySelector("#cta-flow"));
+   const heroCleanup=window.setInterval(()=>{if(!alive()){stopHeroFlow();stopCtaFlow();window.clearInterval(heroCleanup);}},500);
+   const workflow=root.querySelector(".workflow-section");
+   if(workflow){workflow.insertAdjacentHTML("beforebegin",referenceWorkflow());workflow.remove();}
+
   async function book(){
    const heroBook=root.querySelector("#hero-book");
    if(heroBook)heroBook.innerHTML=skeleton("Loading allocation");
    try{
     const parsed=await postJson("/api/parse",{text:DEFAULT_BOOK_TEXT});if(!alive())return;
     if(heroBook)heroBook.innerHTML=`<div class="preview-head"><h2>Monthly demo book</h2><strong>${usd(parsed.totals.gross_usd)}</strong></div><p>${usd(parsed.totals.spend_usd)} allocated to three people</p><div class="recipient-list">${parsed.allocation.filter(r=>r.role==="spend").map(r=>`<div class="recipient-row"><div><strong>${esc(r.name)}</strong><span>${esc(r.city)}</span></div><strong>${usd(r.usd)}</strong></div>`).join("")}</div><p class="preview-held">${usd(parsed.totals.hold_usd)} excluded from preparation</p>`;
-    const visual=root.querySelector("#interactive-visual");
-    const index=root.querySelector("#workflow-index");
-    const items=root.querySelectorAll(".workflow-step");
+    const visual=root.querySelector("#allocation-visual");
+    const items=root.querySelectorAll(".interactive-list-item");
     if(visual&&items.length){
       const renderStep=(step)=>{
         items.forEach((item,itemIndex)=>{const active=itemIndex===step;item.classList.toggle("active",active);item.setAttribute("aria-selected",String(active));});
-        index?.style.setProperty("--active-step",step);
-        if(step===0)visual.innerHTML=`<figure class="workflow-image-visual"><img src="/assets/workflow-describe.webp" alt="A written instruction branching toward three payout destinations"><figcaption><span>Describe</span><strong>One sentence defines a ${usd(parsed.totals.gross_usd)} monthly book.</strong></figcaption></figure>`;
-        else if(step===1)visual.innerHTML=`<figure class="workflow-image-visual"><img src="/assets/workflow-review.webp" alt="One budget splitting toward three recipient tokens with a separate reserve"><figcaption><span>Review</span><strong>${usd(parsed.totals.spend_usd)} goes to three people. ${usd(parsed.totals.hold_usd)} stays excluded.</strong></figcaption></figure>`;
-        else if(step===2)visual.innerHTML=`<figure class="workflow-image-visual"><img src="/assets/workflow-prepare.webp" alt="Three prepared document packets connected to a central rail"><figcaption><span>Prepare</span><strong>Three unsigned x402 requirements. Nothing is sent.</strong></figcaption></figure>`;
-        else visual.innerHTML=`<figure class="workflow-image-visual"><img src="/assets/workflow-verify.webp" alt="A receipt aligned with an abstract content hash matrix"><figcaption><span>Verify</span><strong>The saved receipt is checked against its SHA-256 content hash.</strong></figcaption></figure>`;
+        if(step===0)visual.innerHTML=`<div class="interactive-card"><span class="interactive-kicker">Describe</span><blockquote>${esc(DEFAULT_BOOK_TEXT)}</blockquote><p>The fixed monthly book is ready to review.</p></div>`;
+        else if(step===1)visual.innerHTML=`<div class="interactive-table"><h3>Review</h3>${allocations(parsed.allocation)}</div>`;
+        else if(step===2)visual.innerHTML=`<div class="interactive-card"><span class="interactive-kicker">Prepare</span><strong class="balance-amount">3</strong><p>Unsigned x402 payment requirements prepared. Nothing is sent.</p></div>`;
+        else visual.innerHTML=`<div class="interactive-card"><span class="interactive-kicker">Verify</span><strong class="interactive-check">Receipt integrity</strong><p>SHA-256 checks the saved content. It does not prove settlement.</p></div>`;
       };
       items.forEach((item,itemIndex)=>{
         item.onclick=()=>renderStep(itemIndex);
         item.onkeydown=event=>{if(event.key!=="ArrowDown"&&event.key!=="ArrowUp")return;event.preventDefault();const next=(itemIndex+(event.key==="ArrowDown"?1:-1)+items.length)%items.length;items[next].focus();renderStep(next);};
       });
-      renderStep(0);
-      const stages=root.querySelectorAll("[data-workflow-stage]");
-      const desktopWorkflow=window.matchMedia("(min-width:901px)");
-      if(stages.length&&desktopWorkflow.matches&&"IntersectionObserver" in window){
-        const stageObserver=new IntersectionObserver(entries=>{
-          if(!alive())return;
-          entries.forEach(entry=>{if(entry.isIntersecting)renderStep(Number(entry.target.dataset.workflowStage));});
-        },{rootMargin:"-49% 0px -49% 0px",threshold:0});
-        stages.forEach(stage=>stageObserver.observe(stage));
-        const observerCleanup=window.setInterval(()=>{if(!alive()){stageObserver.disconnect();window.clearInterval(observerCleanup);}},500);
-      }
+      renderStep(1);
     }
    }catch(error){if(alive()){if(heroBook)heroBook.innerHTML=errorState("Demo book unavailable",error.message,"retry-book-0");root.querySelectorAll('[id^="retry-book-"]').forEach(button=>button.onclick=book);}}
   }
   async function latest(){
    const target=root.querySelector("#latest-receipt");
    try{const rows=await api("/api/receipts");if(!alive())return;
-    if(!rows.length){target.innerHTML=empty("No receipts on this instance yet","Prepare the first payout to create a receipt.");return;}
+    if(!rows.length){target.innerHTML=receiptPreview();return;}
     const r=rows[0];
     
     target.innerHTML = `
