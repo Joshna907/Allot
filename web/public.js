@@ -2,7 +2,7 @@ import {api,postJson,DEFAULT_BOOK_TEXT,esc,usd,formatUtc} from "/lib.js";
 import {mountHeroFlow} from "/hero-canvas.js?v=5";
 import {heading,link,external,GITHUB,skeleton,errorState,empty,totals,allocations,receiptRow,notice,verification} from "/ui.js";
 
-const referenceWorkflow=()=>`<section class="interactive-layout" id="how-allot-works" aria-labelledby="allocation-walkthrough-title"><div class="interactive-left"><div class="interactive-left-header"><h2 id="allocation-walkthrough-title">One instruction.<br>A record you can trust.</h2><p>Follow the book from plain language to a receipt you can check.</p></div><div class="interactive-accordion" role="tablist" aria-label="Allocation workflow"><button class="interactive-list-item" type="button" role="tab" aria-selected="false" aria-controls="allocation-visual" data-step="0"><h3>Describe</h3><p>Write your payout in everyday language.</p></button><button class="interactive-list-item active" type="button" role="tab" aria-selected="true" aria-controls="allocation-visual" data-step="1"><h3>Review</h3><p>Check every amount and correction.</p></button><button class="interactive-list-item" type="button" role="tab" aria-selected="false" aria-controls="allocation-visual" data-step="2"><h3>Prepare</h3><p>Create unsigned payment requirements.</p></button><button class="interactive-list-item" type="button" role="tab" aria-selected="false" aria-controls="allocation-visual" data-step="3"><h3>Verify</h3><p>Keep a receipt and check its integrity.</p></button></div></div><div class="interactive-right"><div class="workflow-slides" aria-hidden="true"><figure class="workflow-slide" data-slide="0"><img src="/assets/workflow-river.webp" alt=""></figure><figure class="workflow-slide active" data-slide="1"><img src="/assets/workflow-lake.webp" alt=""></figure><figure class="workflow-slide" data-slide="2"><img src="/assets/workflow-glacier.webp" alt=""></figure><figure class="workflow-slide" data-slide="3"><img src="/assets/workflow-coast.webp" alt=""></figure></div><div class="workflow-photo-scrim" aria-hidden="true"></div><div class="interactive-visual" id="allocation-visual" role="tabpanel" aria-live="polite">${skeleton("Loading allocation")}</div><div class="workflow-pagination" aria-hidden="true"><span></span><span class="active"></span><span></span><span></span></div></div></section>`;
+const referenceWorkflow=()=>`<section class="interactive-scroll-scene" id="how-allot-works" aria-labelledby="allocation-walkthrough-title"><div class="interactive-layout"><div class="interactive-left"><div class="interactive-left-header"><h2 id="allocation-walkthrough-title">One instruction.<br>A record you can trust.</h2><p>Follow the book from plain language to a receipt you can check.</p></div><div class="interactive-accordion" role="tablist" aria-label="Allocation workflow"><button class="interactive-list-item active" type="button" role="tab" aria-selected="true" aria-controls="allocation-visual" data-step="0"><h3>Describe</h3><p>Write your payout in everyday language.</p></button><button class="interactive-list-item" type="button" role="tab" aria-selected="false" aria-controls="allocation-visual" data-step="1"><h3>Review</h3><p>Check every amount and correction.</p></button><button class="interactive-list-item" type="button" role="tab" aria-selected="false" aria-controls="allocation-visual" data-step="2"><h3>Prepare</h3><p>Create unsigned payment requirements.</p></button><button class="interactive-list-item" type="button" role="tab" aria-selected="false" aria-controls="allocation-visual" data-step="3"><h3>Verify</h3><p>Keep a receipt and check its integrity.</p></button></div></div><div class="interactive-right"><div class="workflow-slides" aria-hidden="true"><figure class="workflow-slide active" data-slide="0"><img src="/assets/workflow-river.webp" alt=""></figure><figure class="workflow-slide" data-slide="1"><img src="/assets/workflow-lake.webp" alt=""></figure><figure class="workflow-slide" data-slide="2"><img src="/assets/workflow-glacier.webp" alt=""></figure><figure class="workflow-slide" data-slide="3"><img src="/assets/workflow-coast.webp" alt=""></figure></div><div class="workflow-photo-scrim" aria-hidden="true"></div><div class="interactive-visual" id="allocation-visual" role="tabpanel" aria-live="polite">${skeleton("Loading allocation")}</div><div class="workflow-pagination" aria-hidden="true"><span class="active"></span><span></span><span></span><span></span></div></div></div></section>`;
 
 const receiptPreview=()=>`<div class="ledger-terminal ledger-preview"><div class="ledger-header"><div class="ledger-badge">DEMO PREVIEW</div><div class="ledger-time">Create a preparation to save a live receipt</div></div><div class="ledger-body"><div class="ledger-row"><span class="ledger-label">Receipt reference</span><code class="ledger-hash">ALLOT-DEMO-PREVIEW</code></div><div class="ledger-grid"><div><span class="ledger-label">Total budget</span><strong class="ledger-value">$400.00</strong></div><div><span class="ledger-label">Recipients</span><strong class="ledger-value">3</strong></div><div><span class="ledger-label">Prepared</span><strong class="ledger-value ledger-value-ready">$320.00</strong></div><div><span class="ledger-label">Excluded</span><strong class="ledger-value">$80.00</strong></div></div></div><div class="ledger-footer"><p class="ledger-status">Preview only. No receipt has been created and no funds moved.</p><a class="button button-small button-secondary" href="/app" data-link>Open payout book</a></div></div>`;
 export const landingPage={
@@ -19,7 +19,8 @@ export const landingPage={
  async mount({root,alive}){
    const stopHeroFlow=mountHeroFlow(root.querySelector("#hero-flow"));
    const stopCtaFlow=mountHeroFlow(root.querySelector("#cta-flow"));
-   const heroCleanup=window.setInterval(()=>{if(!alive()){stopHeroFlow();stopCtaFlow();window.clearInterval(heroCleanup);}},500);
+   let stopWorkflow=()=>{};
+   const heroCleanup=window.setInterval(()=>{if(!alive()){stopHeroFlow();stopCtaFlow();stopWorkflow();window.clearInterval(heroCleanup);}},500);
    const workflow=root.querySelector(".workflow-section");
    if(workflow){workflow.insertAdjacentHTML("beforebegin",referenceWorkflow());workflow.remove();}
 
@@ -32,39 +33,44 @@ export const landingPage={
     const visual=root.querySelector("#allocation-visual");
     const items=root.querySelectorAll(".interactive-list-item");
     if(visual&&items.length){
-      const section=root.querySelector(".interactive-layout");
       const slides=root.querySelectorAll(".workflow-slide");
-      const markers=root.querySelectorAll(".workflow-pagination span");
-      const reduceMotion=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      let currentStep=1;
-      let cycleTimer=0;
       const cardContent=[
         `<div class="interactive-card"><header class="interactive-card-head"><span>Monthly payout book</span><b>Describe</b></header><span class="interactive-kicker">Plain-language instruction</span><blockquote>${esc(DEFAULT_BOOK_TEXT)}</blockquote><div class="interactive-card-facts"><span>Budget <strong>$400.00</strong></span><span>Frequency <strong>Monthly</strong></span></div></div>`,
         `<div class="interactive-card interactive-table"><header class="interactive-card-head"><span>Monthly payout book</span><b>Review</b></header><div class="interactive-amount"><strong>${usd(parsed.totals.gross_usd)}</strong><span>${usd(parsed.totals.spend_usd)} allocated</span></div>${allocations(parsed.allocation)}</div>`,
         `<div class="interactive-card"><header class="interactive-card-head"><span>Payment requirements</span><b>Prepare</b></header><span class="interactive-kicker">Unsigned x402 records</span><strong class="balance-amount">3 requirements</strong><p>Each recipient gets a prepared requirement. Nothing is signed, sent, or settled.</p><div class="interactive-card-facts"><span>Prepared <strong>$320.00</strong></span><span>Excluded <strong>$80.00</strong></span></div></div>`,
         `<div class="interactive-card"><header class="interactive-card-head"><span>Saved receipt</span><b>Verify</b></header><span class="interactive-kicker">Content integrity</span><strong class="interactive-check">Receipt matches</strong><p>SHA-256 checks the saved content. It does not prove sender identity or settlement.</p><code class="interactive-hash">ALLOT-9F3C-71E2-4A06</code></div>`
       ];
-      const stopCycle=()=>{if(cycleTimer){window.clearTimeout(cycleTimer);cycleTimer=0;}};
-      const startCycle=()=>{stopCycle();if(reduceMotion)return;cycleTimer=window.setTimeout(()=>renderStep((currentStep+1)%items.length),5600);};
-      const renderStep=(step,restart=true)=>{
-        currentStep=step;
+      visual.innerHTML=cardContent.map((content,index)=>`<div class="interactive-panel-layer${index===0?" active":""}" aria-hidden="${index===0?"false":"true"}" data-panel="${index}">${content}</div>`).join("");
+      const panels=visual.querySelectorAll(".interactive-panel-layer");
+      const pagination=root.querySelectorAll(".workflow-pagination span");
+      const scene=root.querySelector(".interactive-scroll-scene");
+      let activeStep=-1;
+      const renderStep=(step)=>{
+        if(step===activeStep)return;
+        activeStep=step;
         items.forEach((item,itemIndex)=>{const active=itemIndex===step;item.classList.toggle("active",active);item.setAttribute("aria-selected",String(active));item.tabIndex=active?0:-1;});
         slides.forEach((slide,index)=>slide.classList.toggle("active",index===step));
-        markers.forEach((marker,index)=>marker.classList.toggle("active",index===step));
-        visual.innerHTML=cardContent[step];
-        if(!reduceMotion)visual.animate([{opacity:.25,transform:"translateY(16px) scale(.985)"},{opacity:1,transform:"translateY(0) scale(1)"}],{duration:600,easing:"cubic-bezier(.22,1,.36,1)"});
-        if(restart)startCycle();
+        panels.forEach((panel,index)=>{const active=index===step;panel.classList.toggle("active",active);panel.setAttribute("aria-hidden",String(!active));});
+        pagination.forEach((indicator,index)=>indicator.classList.toggle("active",index===step));
       };
       items.forEach((item,itemIndex)=>{
         item.onclick=()=>renderStep(itemIndex);
         item.onkeydown=event=>{const direction={ArrowDown:1,ArrowRight:1,ArrowUp:-1,ArrowLeft:-1}[event.key];if(!direction)return;event.preventDefault();const next=(itemIndex+direction+items.length)%items.length;items[next].focus();renderStep(next);};
       });
-      section.onpointerenter=stopCycle;
-      section.onpointerleave=startCycle;
-      section.onfocusin=stopCycle;
-      section.onfocusout=event=>{if(!section.contains(event.relatedTarget))startCycle();};
-      renderStep(1);
-      const workflowCleanup=window.setInterval(()=>{if(!alive()){stopCycle();window.clearInterval(workflowCleanup);}},500);
+      let scrollFrame=0;
+      const updateFromScroll=()=>{
+        scrollFrame=0;
+        if(!scene||!alive())return;
+        const bounds=scene.getBoundingClientRect();
+        const distance=Math.max(1,scene.offsetHeight-window.innerHeight);
+        const progress=Math.max(0,Math.min(1,-bounds.top/distance));
+        renderStep(Math.min(items.length-1,Math.floor(progress*items.length)));
+      };
+      const requestScrollUpdate=()=>{if(!scrollFrame)scrollFrame=window.requestAnimationFrame(updateFromScroll);};
+      window.addEventListener("scroll",requestScrollUpdate,{passive:true});
+      window.addEventListener("resize",requestScrollUpdate,{passive:true});
+      stopWorkflow=()=>{window.removeEventListener("scroll",requestScrollUpdate);window.removeEventListener("resize",requestScrollUpdate);if(scrollFrame)window.cancelAnimationFrame(scrollFrame);};
+      updateFromScroll();
     }
    }catch(error){if(alive()){if(heroBook)heroBook.innerHTML=errorState("Demo book unavailable",error.message,"retry-book-0");root.querySelectorAll('[id^="retry-book-"]').forEach(button=>button.onclick=book);}}
   }

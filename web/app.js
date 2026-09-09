@@ -1,9 +1,11 @@
 import { copyText } from "/lib.js";
+import { mountHeroFlow } from "/hero-canvas.js?v=5";
 import { header, footer, errorState } from "/ui.js";
 import { landingPage, howPage, writeupPage } from "/public.js";
 import { bookPage, preparePage, activityPage, receiptPage, verifyPage } from "/product.js";
 const root = document.getElementById("main-content");
 let revision = 0;
+let stopFooterFlow=()=>{};
 
 function enhanceInfrastructureStrip(){
   const hero=root.querySelector(".hero");
@@ -17,6 +19,15 @@ function enhanceInfrastructureStrip(){
   strip.setAttribute("aria-label","Infrastructure used by Allot");
   strip.innerHTML=`<p class="infra-eyebrow">BUILT ON OPEN PAYMENT INFRASTRUCTURE</p><div class="infra-window"><div class="infra-track"><div class="infra-set">${brandRow}</div><div class="infra-set" aria-hidden="true">${brandRow}</div></div></div><p class="infra-boundary">Demo preparation only. No signatures, broadcast, or settlement.</p>`;
   hero.insertAdjacentElement("afterend",strip);
+}
+function enhanceFooterVideo(){
+  stopFooterFlow();
+  stopFooterFlow=mountHeroFlow(document.querySelector("#footer-flow"));
+  const video=document.querySelector(".footer-video");
+  if(!video||window.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  video.addEventListener("error",()=>video.closest(".site-footer")?.classList.add("footer-video-unavailable"),{once:true});
+  video.src=`/assets/${video.dataset.file}`;
+  video.play().catch(()=>video.closest(".site-footer")?.classList.add("footer-video-unavailable"));
 }
 function match(path) {
   const pages = {"/":landingPage,"/app":bookPage,"/app/prepare":preparePage,"/receipts":activityPage,"/verify":verifyPage,"/how-it-works":howPage,"/writeup":writeupPage};
@@ -37,6 +48,7 @@ export async function navigate(url,{replace=false}={}) {
   const product=path.startsWith("/app")||path.startsWith("/receipts");
   document.getElementById("site-header").innerHTML=header(path,product);
   document.getElementById("site-footer").innerHTML=footer(product);
+  enhanceFooterVideo();
   root.innerHTML=page.render(params);
   if(path==="/")enhanceInfrastructureStrip();
   root.querySelector("h1")?.focus({preventScroll:true});
