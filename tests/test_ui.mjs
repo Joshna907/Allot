@@ -32,7 +32,8 @@ test("public navigation keeps build notes out of the navbar",()=>{
 test("product navigation is task focused",()=>{
  const header=ui.header("/app/prepare",true);
  assert.match(header,/Payout book/);assert.match(header,/Activity/);assert.match(header,/aria-current="page"/);
- assert.doesNotMatch(header,/Build notes/);
+ assert.doesNotMatch(header,/Build notes/);assert.doesNotMatch(header,/Help/);
+ assert.doesNotMatch(ui.footer(true),/>Help</);
 });
 test("verification unavailable is not an endless loading state",()=>{
  const html=ui.verification(null);assert.match(html,/Could not verify/);assert.doesNotMatch(html,/aria-busy/);
@@ -62,5 +63,11 @@ test("optional discovery failure is a warning with all endpoints retained",()=>{
 test("server-calculated allocations are displayed directly",()=>{
  const html=ui.allocations([{role:"spend",name:"Amara",city:"Lagos",usd:"128.03",note:"Rent"}]);
  assert.match(html,/128\.03/);
+});
+
+test("saved receipts have a useful fallback state",()=>{
+ const html=ui.receiptRow({receipt_id:"ALLOT-1",receipt_hash:"hash",issued_at:"2026-09-14T00:00:00Z",totals:{gross_usd:"400",spend_usd:"320",hold_usd:"80"},legs:[]});
+ assert.match(html,/Receipt saved/);
+ assert.doesNotMatch(html,/Unknown/);
 });
 
